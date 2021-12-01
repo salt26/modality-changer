@@ -180,3 +180,15 @@ if __name__ == '__main__':
         print(e)
         f2 = emotion_dict_to_midi_feature(e)
         print(f2)
+
+    while True:
+        file_path = input("Input MIDI(.mid) file path (input \"exit\" to terminate): ")
+        file_path.strip("\"")
+        if file_path == "exit": break
+        f = midi_to_midi_feature(file_path)
+        print(f)
+        e = midi_feature_dict_to_emotion(f)
+        print(e)
+        f2 = emotion_dict_to_midi_feature(e)
+        print(f2)
+        print()
