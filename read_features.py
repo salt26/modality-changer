@@ -1,6 +1,24 @@
 import numpy as np
 import pandas as pd
 
+def pitch_class(note_position):
+    p = note_position % 12
+    switcher = {
+        0: 'C',
+        1: 'C#',
+        2: 'D',
+        3: 'D#',
+        4: 'E',
+        5: 'F',
+        6: 'F#',
+        7: 'G',
+        8: 'G#',
+        9: 'A',
+        10: 'A#',
+        11: 'B'
+    }
+    return switcher.get(p)
+
 # midi_extractor.py에서 나온 결과인 *.npy를 읽어서 음악 특징 벡터 테이블(vgmidi_emotion.csv)을 만드는 코드
 if __name__ == '__main__':
 
@@ -14,6 +32,7 @@ if __name__ == '__main__':
     rhythm_density = np.load("output/extracted/rhythm.npy")
     roman_numeral = np.load("output/extracted/roman_numeral_chord.npy")
     tempo = np.load("output/extracted/tempo.npy")
+    mean_note_pitch = np.load("output/extracted/mean_note_pitch.npy")
     valence = np.load("output/extracted/valence.npy")
     arousal = np.load("output/extracted/arousal.npy")
 
@@ -39,15 +58,17 @@ if __name__ == '__main__':
     print(rhythm_density.shape)
     print(roman_numeral.shape)
     print(tempo.shape)
+    print(mean_note_pitch.shape)
     print(valence.shape)            # (seq_len, )
     print(arousal.shape)            # (seq_len, )
 
     data = []
     header = ["ID", "song", "measure", "empty", "key.local.major",
-        "key.global.major", "chord.maj", "chord.min", "chord.aug",
-        "chord.dim", "chord.sus4", "chord.dom7", "chord.min7",
-        "note.density", "note.octave", "note.velocity", "rhythm.density",
-        "tempo", "valence", "arousal"]
+        "key.global.major", "tonic.local", "tonic.global",
+        "chord.maj", "chord.min", "chord.aug",
+        "chord.dim", "chord.sus4", "chord.dom7", "chord.min7", "roman.numeral",
+        "note.density", "note.pitch.mean", "note.velocity", "rhythm.density",
+        "tempo", "valence", "arousal", "emotion.category"]
     #data.append(header)
     
     
@@ -73,6 +94,14 @@ if __name__ == '__main__':
             key_global_major = 1
         entity.append(key_global_major)
 
+        # tonic.local: 1, 13 -> 'C' / 2, 14 -> 'D' / ... / 12, 24 -> 'B'
+        tonic_local = pitch_class(key[i] - 1)
+        entity.append(tonic_local)
+
+        # tonic.global: 1, 13 -> 'C' / 2, 14 -> 'D' / ... / 12, 24 -> 'B'
+        tonic_global = pitch_class(global_key[i] - 1)
+        entity.append(tonic_global)
+
         # chord: 1 ~ 12 -> maj, 13 ~ 24 -> min, 25 ~ 36 -> aug, 37 ~ 48 -> dim, 49 ~ 60: sus4, 61 ~ 72: dom7, 73 ~ 84: min7
         chord_maj = 0
         chord_min = 0
@@ -97,11 +126,14 @@ if __name__ == '__main__':
         entity.append(chord_dom7)
         entity.append(chord_min7)
 
+        # roman.numeral
+        entity.append(roman_numeral[i][0])
+
         # note.density
         entity.append(np.mean(note_density[i]))
 
-        # note.octave
-        entity.append(np.mean(note_octave[i][np.nonzero(note_octave[i])]) - 1)
+        # note.pitch.mean
+        entity.append(np.mean(mean_note_pitch[i][np.nonzero(mean_note_pitch[i])]) - 1)
 
         # note.velocity
         entity.append(np.mean(note_velocity[i]))
@@ -115,6 +147,9 @@ if __name__ == '__main__':
         # valence, arousal
         entity.append(valence[i])
         entity.append(arousal[i])
+
+        # TODO emotion.category
+        entity.append("HL")
 
         data.append(entity)
 
