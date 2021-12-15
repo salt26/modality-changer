@@ -16,12 +16,14 @@ import torch
 from valence_preprocess import get_preprocessed_valence_arousal_dict
 from IPython import embed
 
+"""
 # This is not the original magenta.
 # Clone the folder from the link below.
 # https://github.com/gudgud96/magenta/tree/master/magenta
 import magenta
 from magenta.models.score2perf.music_encoders import MidiPerformanceEncoder
 import magenta.music
+"""
 
 chord_templates = {}
 OUT_DIR = './output/'
@@ -108,6 +110,7 @@ def unit_index(tick, tpb):
     return math.floor(tick / unit_tick)
 
 
+"""
 # Read .mid file and return its token sequence as an int array.
 # Note: if your tensorflow version is 2.x,
 #       you should modify magenta/music/midi_io.py as below to make no error.
@@ -134,6 +137,7 @@ def magenta_decode_midi(notes, is_eos=False):
             add_eos=is_eos)
     temp_file_path = mpe.decode(notes, return_pm=False)
     return temp_file_path
+"""
 
 
 def read_dir(in_dir, verbose=False, one_hot=False, valence_label=True, arousal_label=True):
@@ -142,7 +146,7 @@ def read_dir(in_dir, verbose=False, one_hot=False, valence_label=True, arousal_l
 
     ### valid (filtered) data (splitted), feature lists
     v_midi_list = []
-    v_token_list = []
+    #v_token_list = []
     v_rhythm_density_list =[]
     v_note_density_list = []
     v_melodic_contour_list = []
@@ -204,12 +208,14 @@ def read_dir(in_dir, verbose=False, one_hot=False, valence_label=True, arousal_l
             v_midi_list.extend(sequence_files)
 
             token_sequences = []
+            """
             for file in sequence_files:
                 token_sequences.append(magenta_encode_midi(OUT_DIR + file))
 
             for ts in token_sequences:
                 ts.append(1)
                 v_token_list.append(torch.Tensor(ts))
+            """
 
             if valence_label:
                 if fname == "Legend_Of_Zelda_The_Ocarina_Of_Time_PreludeofLight":
@@ -284,7 +290,7 @@ def read_dir(in_dir, verbose=False, one_hot=False, valence_label=True, arousal_l
         f.write(str(i)+" "+name+"\n")
     f.close()
 
-    v_token_list = torch.nn.utils.rnn.pad_sequence(v_token_list, batch_first=True).numpy().astype(int)
+    #v_token_list = torch.nn.utils.rnn.pad_sequence(v_token_list, batch_first=True).numpy().astype(int)
     v_rhythm_density_list = np.array(v_rhythm_density_list)
     v_note_density_list = np.array(v_note_density_list)
     v_melodic_contour_list = np.array(v_melodic_contour_list)
@@ -301,21 +307,25 @@ def read_dir(in_dir, verbose=False, one_hot=False, valence_label=True, arousal_l
         v_valence_list = np.array(v_valence_list)
         v_arousal_list = np.array(v_arousal_list)
 
-        print("Shapes for: Data, Rhythm Density, Note Density, Melodic_contour, "
+        #print("Shapes for: Data, Rhythm Density, Note Density, Melodic_contour, "
+        print("Shapes for: Rhythm Density, Note Density, Melodic_contour, "
               "Key, Global_key, Chord, Roman_numeral_chord, Note_velocity, "
               "Note_octave, Mean_note_pitch, Tempo, Valence, Arousal")
-        print(v_token_list.shape, v_rhythm_density_list.shape, v_note_density_list.shape, v_melodic_contour_list.shape,
+        #print(v_token_list.shape, v_rhythm_density_list.shape, v_note_density_list.shape, v_melodic_contour_list.shape,
+        print(v_rhythm_density_list.shape, v_note_density_list.shape, v_melodic_contour_list.shape,
               v_key_list.shape, v_global_key_list.shape, v_chord_list.shape, v_roman_numeral_chord_list.shape, v_note_velocity_list.shape,
               v_note_octave_list.shape, v_mean_note_pitch_list, v_tempo_list.shape, v_valence_list.shape, v_arousal_list.shape)
     else:
-        print("Shapes for: Data, Rhythm Density, Note Density, Melodic_contour, "
+        #print("Shapes for: Data, Rhythm Density, Note Density, Melodic_contour, "
+        print("Shapes for: Rhythm Density, Note Density, Melodic_contour, "
               "Key, Global_key, Chord, Roman_numeral_chord, Note_velocity, "
               "Note_octave, Mean_note_pitch, Tempo")
-        print(v_token_list.shape, v_rhythm_density_list.shape, v_note_density_list.shape, v_melodic_contour_list.shape,
+        #print(v_token_list.shape, v_rhythm_density_list.shape, v_note_density_list.shape, v_melodic_contour_list.shape,
+        print(v_rhythm_density_list.shape, v_note_density_list.shape, v_melodic_contour_list.shape,
               v_key_list.shape, v_global_key_list.shape, v_chord_list.shape, v_roman_numeral_chord_list.shape, v_note_velocity_list.shape,
               v_note_octave_list.shape, v_mean_note_pitch_list, v_tempo_list.shape)
 
-    np.save(OUT_DIR+"extracted/data.npy", v_token_list)
+    #np.save(OUT_DIR+"extracted/data.npy", v_token_list)
     np.save(OUT_DIR+"extracted/rhythm.npy", v_rhythm_density_list)
     np.save(OUT_DIR+"extracted/note_density.npy", v_note_density_list)
     np.save(OUT_DIR+"extracted/melodic_contour.npy", v_melodic_contour_list)
@@ -1427,7 +1437,7 @@ def extract_note_octave(sequences, onset_sequences, sequences_length, verbose=Fa
 # Note that one_hot option is not available!
 def extract_mean_note_pitch(sequences, onset_sequences, sequences_length, verbose=False, valid_sequences=None):
 
-    note_pitch_vector = np.zeros((sequences_length), dtype=np.int64)
+    note_pitch_vector = np.zeros((sequences_length), dtype=np.float64)
 
     visualizing_length = VERBOSE_MAX_INDEX
     if visualizing_length == -1:

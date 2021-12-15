@@ -1,6 +1,8 @@
 import numpy as np
 import pandas as pd
 
+chord_types = ["maj", "min", "aug", "dim", "sus4", "dom7", "min7"]
+
 def pitch_class(note_position):
     p = note_position % 12
     switcher = {
@@ -18,6 +20,49 @@ def pitch_class(note_position):
         11: 'B'
     }
     return switcher.get(p)
+
+def roman_numeral_label(relative_pitch, quality):
+    p = relative_pitch % 12
+    switcher = {
+        0: 'I',
+        1: '#I',
+        2: 'II',
+        3: '#II',
+        4: 'III',
+        5: 'IV',
+        6: '#IV',
+        7: 'V',
+        8: '#V',
+        9: 'VI',
+        10: '#VI',
+        11: 'VII',
+        12: 'i',
+        13: '#i',
+        14: 'ii',
+        15: '#ii',
+        16: 'iii',
+        17: 'iv',
+        18: '#iv',
+        19: 'v',
+        20: '#v',
+        21: 'vi',
+        22: '#vi',
+        23: 'vii'
+    }
+    if quality == "maj":
+        return switcher.get(p)
+    elif quality == "min":
+        return switcher.get(p + 12)
+    elif quality == "aug":
+        return switcher.get(p) + str("+")
+    elif quality == "dim":
+        return switcher.get(p + 12) + str("o")
+    elif quality == "sus4":
+        return switcher.get(p) + str("sus4")
+    elif quality == "dom7":
+        return switcher.get(p) + str("7")
+    else:  # quality == "min7":
+        return switcher.get(p + 12) + str("7")
 
 # midi_extractor.py에서 나온 결과인 *.npy를 읽어서 음악 특징 벡터 테이블(vgmidi_emotion.csv)을 만드는 코드
 if __name__ == '__main__':
@@ -66,9 +111,9 @@ if __name__ == '__main__':
     header = ["ID", "song", "measure", "empty", "key.local.major",
         "key.global.major", "tonic.local", "tonic.global",
         "chord.maj", "chord.min", "chord.aug",
-        "chord.dim", "chord.sus4", "chord.dom7", "chord.min7", "roman.numeral",
+        "chord.dim", "chord.sus4", "chord.dom7", "chord.min7", "roman.numeral", "roman.numeral.label",
         "note.density", "note.pitch.mean", "note.velocity", "rhythm.density",
-        "tempo", "valence", "arousal", "emotion.category"]
+        "tempo", "valence", "arousal", "valence.category", "arousal.category"]
     #data.append(header)
     
     
@@ -127,13 +172,19 @@ if __name__ == '__main__':
         entity.append(chord_min7)
 
         # roman.numeral
-        entity.append(roman_numeral[i][0])
+        entity.append(roman_numeral[i])
+
+        # roman.numeral.label
+        if roman_numeral[i] == 0:
+            entity.append("no_chord")
+        else:
+            entity.append(roman_numeral_label(roman_numeral[i] - 1, chord_types[(roman_numeral[i] - 1) // 12]))
 
         # note.density
         entity.append(np.mean(note_density[i]))
 
         # note.pitch.mean
-        entity.append(np.mean(mean_note_pitch[i][np.nonzero(mean_note_pitch[i])]) - 1)
+        entity.append(mean_note_pitch[i] - 1)
 
         # note.velocity
         entity.append(np.mean(note_velocity[i]))
@@ -148,8 +199,21 @@ if __name__ == '__main__':
         entity.append(valence[i])
         entity.append(arousal[i])
 
-        # TODO emotion.category
-        entity.append("HL")
+        # valence.category
+        if valence[i] < 0.0:
+            entity.append("L")
+        elif valence[i] < 0.5290476:
+            entity.append("M")
+        else:
+            entity.append("H")
+
+        # arousal.category
+        if arousal[i] < -0.1404167:
+            entity.append("L")
+        elif arousal[i] < 0.3381111:
+            entity.append("M")
+        else:
+            entity.append("H")
 
         data.append(entity)
 
