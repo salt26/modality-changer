@@ -104,7 +104,7 @@ def emotion_to_midi_feature(valence, arousal):
     f["key.local.major"] = clamp(0.482460 + 0.144274 * valence - 0.040919 * arousal, 0, 1, True)
     f["key.global.major"] = clamp(0.403267 + 0.382065 * valence - 0.052849 * arousal, 0, 1, True)
 
-    f["chord.maj"] = clamp(4.14292 + 1.47985 * valence - 0.27026 * arousal, 0, 16) #max(0, min(16, round(4.14292 + 1.47985 * valence - 0.27026 * arousal)))
+    f["chord.maj"] = clamp(4.14292 + 1.47985 * valence - 0.27026 * arousal, 0, 16)
     f["chord.min"] = clamp(3.43880 - 1.30647 * valence + 0.61270 * arousal, 0, 16)
     f["chord.aug"] = clamp(0.49831 - 0.15036 * valence + 0.12709 * arousal, 0, 16)
     f["chord.dim"] = clamp(0.85197 - 0.67637 * valence + 0.39020 * arousal, 0, 16)
@@ -185,10 +185,27 @@ if __name__ == '__main__':
         file_path = input("Input MIDI(.mid) file path (input \"exit\" to terminate): ")
         file_path.strip("\"")
         if file_path == "exit": break
-        f = midi_to_midi_feature(file_path)
-        print(f)
-        e = midi_feature_dict_to_emotion(f)
-        print(e)
-        f2 = emotion_dict_to_midi_feature(e)
-        print(f2)
+        v = []
+        a = []
+        empty = []
+        for i in range(68):
+            f = midi_to_midi_feature(file_path, i, i + 1)
+            print(f)
+            empty.append(f["empty"])
+            if f["empty"] == 1:
+                v.append(-2)
+                a.append(-2)
+            else:
+                e = midi_feature_dict_to_emotion(f)
+                print(e)
+                v.append(e["valence"])
+                a.append(e["arousal"])
+                """
+                f2 = emotion_dict_to_midi_feature(e)
+                print(f2)
+                print()
+                """
+        print(empty)
+        print(v)
+        print(a)
         print()
