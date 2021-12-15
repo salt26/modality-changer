@@ -152,6 +152,7 @@ def read_dir(in_dir, verbose=False, one_hot=False, valence_label=True, arousal_l
     v_roman_numeral_chord_list = []
     v_note_velocity_list = []
     v_note_octave_list = []
+    v_mean_note_pitch_list = []
     v_tempo_list = []
     v_valence_list = []
     v_arousal_list = []
@@ -237,6 +238,7 @@ def read_dir(in_dir, verbose=False, one_hot=False, valence_label=True, arousal_l
             v_roman_numeral_chord_list.extend(features['Roman_numeral_chord'])
             v_note_velocity_list.extend(features['Note_velocity'])
             v_note_octave_list.extend(features['Note_octave'])
+            v_mean_note_pitch_list.extend(features['Mean_note_pitch'])
             v_tempo_list.extend(features['Tempo'])
 
             assert(len(v_rhythm_density_list) == len(v_midi_list))
@@ -248,6 +250,7 @@ def read_dir(in_dir, verbose=False, one_hot=False, valence_label=True, arousal_l
             assert(len(v_roman_numeral_chord_list) == len(v_midi_list))
             assert(len(v_note_velocity_list) == len(v_midi_list))
             assert(len(v_note_octave_list) == len(v_midi_list))
+            assert(len(v_mean_note_pitch_list) == len(v_midi_list))
             assert(len(v_tempo_list) == len(v_midi_list))
 
             if valence_label:
@@ -291,6 +294,7 @@ def read_dir(in_dir, verbose=False, one_hot=False, valence_label=True, arousal_l
     v_roman_numeral_chord_list = np.array(v_roman_numeral_chord_list)
     v_note_velocity_list = np.array(v_note_velocity_list)
     v_note_octave_list = np.array(v_note_octave_list)
+    v_mean_note_pitch_list = np.array(v_mean_note_pitch_list)
     v_tempo_list = np.array(v_tempo_list)
 
     if valence_label and arousal_label:
@@ -299,17 +303,17 @@ def read_dir(in_dir, verbose=False, one_hot=False, valence_label=True, arousal_l
 
         print("Shapes for: Data, Rhythm Density, Note Density, Melodic_contour, "
               "Key, Global_key, Chord, Roman_numeral_chord, Note_velocity, "
-              "Note_octave, Tempo, Valence, Arousal")
+              "Note_octave, Mean_note_pitch, Tempo, Valence, Arousal")
         print(v_token_list.shape, v_rhythm_density_list.shape, v_note_density_list.shape, v_melodic_contour_list.shape,
               v_key_list.shape, v_global_key_list.shape, v_chord_list.shape, v_roman_numeral_chord_list.shape, v_note_velocity_list.shape,
-              v_note_octave_list.shape, v_tempo_list.shape, v_valence_list.shape, v_arousal_list.shape)
+              v_note_octave_list.shape, v_mean_note_pitch_list, v_tempo_list.shape, v_valence_list.shape, v_arousal_list.shape)
     else:
         print("Shapes for: Data, Rhythm Density, Note Density, Melodic_contour, "
               "Key, Global_key, Chord, Roman_numeral_chord, Note_velocity, "
-              "Note_octave, Tempo")
+              "Note_octave, Mean_note_pitch, Tempo")
         print(v_token_list.shape, v_rhythm_density_list.shape, v_note_density_list.shape, v_melodic_contour_list.shape,
               v_key_list.shape, v_global_key_list.shape, v_chord_list.shape, v_roman_numeral_chord_list.shape, v_note_velocity_list.shape,
-              v_note_octave_list.shape, v_tempo_list.shape)
+              v_note_octave_list.shape, v_mean_note_pitch_list, v_tempo_list.shape)
 
     np.save(OUT_DIR+"extracted/data.npy", v_token_list)
     np.save(OUT_DIR+"extracted/rhythm.npy", v_rhythm_density_list)
@@ -321,6 +325,7 @@ def read_dir(in_dir, verbose=False, one_hot=False, valence_label=True, arousal_l
     np.save(OUT_DIR+"extracted/roman_numeral_chord.npy", v_roman_numeral_chord_list)
     np.save(OUT_DIR+"extracted/note_velocity.npy", v_note_velocity_list)
     np.save(OUT_DIR+"extracted/note_octave.npy", v_note_octave_list)
+    np.save(OUT_DIR+"extracted/mean_note_pitch.npy", v_mean_note_pitch_list)
     np.save(OUT_DIR+"extracted/tempo.npy", v_tempo_list)
 
     if valence_label:
@@ -768,6 +773,8 @@ def extract_features(sequences, onset_sequences, sequences_length, events, verbo
                                                       valid_sequences=valid_sequences)
     features['Note_octave'] = extract_note_octave(sequences, onset_sequences, sequences_length, verbose, one_hot,
                                                   valid_sequences=valid_sequences)
+    features['Mean_note_pitch'] = extract_mean_note_pitch(sequences, onset_sequences, sequences_length, verbose,
+                                                  valid_sequences=valid_sequences)
     features['Tempo'] = extract_tempo(events, sequences_length, verbose, one_hot, valid_sequences=valid_sequences)
 
     return features
@@ -1170,11 +1177,13 @@ def extract_chord(sequences, sequences_length, verbose=False, one_hot=False, val
         return chord_vector
 
 
-# relative chord recognition using sliding window with size=(2nd note)
+# relative chord recognition from each measure
 def extract_roman_numeral_chord(sequences, sequences_length, verbose=False, one_hot=False, valid_sequences=None):
 
-    roman_numeral_chord_vector = np.zeros((sequences_length, unit_duration), dtype=np.int64)
-    roman_numeral_chord_vector_oh = np.zeros((sequences_length, unit_duration, 85))
+    #roman_numeral_chord_vector = np.zeros((sequences_length, unit_duration), dtype=np.int64)
+    #roman_numeral_chord_vector_oh = np.zeros((sequences_length, unit_duration, 85))
+    roman_numeral_chord_vector = np.zeros((sequences_length), dtype=np.int64)
+    roman_numeral_chord_vector_oh = np.zeros((sequences_length, 85))
 
     temp_key_vector = extract_global_key(sequences, sequences_length, False, False, valid_sequences=None)
 
@@ -1249,38 +1258,43 @@ def extract_roman_numeral_chord(sequences, sequences_length, verbose=False, one_
         if verbose and not (valid_sequences is not None and not valid_sequences[i]) and i < visualizing_length:
             print(str(i))
 
-        for j in range(0, unit_duration):
-            temp_frame = sequences[i, max(j - 4, 0): min(j + 3, 15), :]
-            temp_unique_pitch, temp_pitch_count = np.unique(np.mod(np.subtract(np.nonzero(temp_frame)[1],
-                                                                               (temp_key_vector[i] - 1) % 12), 12), return_counts=True)
-            temp_chroma = np.empty(12)
-            temp_chroma.fill(eps)
+        #for j in range(0, unit_duration):
+            #temp_frame = sequences[i, max(j - 4, 0): min(j + 3, 15), :]  # using sliding window with size=(2nd note)
+        temp_frame = sequences[i, :, :]
+        temp_unique_pitch, temp_pitch_count = np.unique(np.mod(np.subtract(np.nonzero(temp_frame)[1],
+                                                                           (temp_key_vector[i] - 1) % 12), 12), return_counts=True)
+        temp_chroma = np.empty(12)
+        temp_chroma.fill(eps)
 
-            for k, p in enumerate(temp_unique_pitch):
-                temp_chroma[p] += temp_pitch_count[k]
+        for k, p in enumerate(temp_unique_pitch):
+            temp_chroma[p] += temp_pitch_count[k]
 
-            if len(temp_unique_pitch) > 1:
-                temp_chroma = np.divide(temp_chroma, np.sum(temp_chroma))
-                temp_distance = np.empty(84)
+        if len(temp_unique_pitch) > 1:
+            temp_chroma = np.divide(temp_chroma, np.sum(temp_chroma))
+            temp_distance = np.empty(84)
 
-                # Calculate KL Divergence
-                for k, t in enumerate(chord_types):
-                    temp_distance[12 * k: 12 * k + 12] = np.sum(np.add(np.subtract(np.multiply(chord_templates[t],
-                                                                          np.log(np.divide(chord_templates[t],
-                                                                                           temp_chroma))),
-                                                              chord_templates[t]), temp_chroma), axis=1)
-                temp_chord = np.argmin(temp_distance) + 1
-                if verbose and not (valid_sequences is not None and not valid_sequences[i]) and i < visualizing_length:
-                    # Print chord label
-                    print(roman_numeral(temp_chord - 1, chord_types[(temp_chord - 1) // 12]))
-                roman_numeral_chord_vector[i, j] = temp_chord
-                roman_numeral_chord_vector_oh[i, j, temp_chord] = 1
-            else:
-                # There is no chord (when # of unique pitch <= 1)
-                if verbose and not (valid_sequences is not None and not valid_sequences[i]) and i < visualizing_length:
-                    print("no chord")
-                roman_numeral_chord_vector[i, j] = 0
-                roman_numeral_chord_vector_oh[i, j, 0] = 1
+            # Calculate KL Divergence
+            for k, t in enumerate(chord_types):
+                temp_distance[12 * k: 12 * k + 12] = np.sum(np.add(np.subtract(np.multiply(chord_templates[t],
+                                                                      np.log(np.divide(chord_templates[t],
+                                                                                       temp_chroma))),
+                                                          chord_templates[t]), temp_chroma), axis=1)
+            temp_chord = np.argmin(temp_distance) + 1
+            if verbose and not (valid_sequences is not None and not valid_sequences[i]) and i < visualizing_length:
+                # Print chord label
+                print(roman_numeral(temp_chord - 1, chord_types[(temp_chord - 1) // 12]))
+            #roman_numeral_chord_vector[i, j] = temp_chord
+            #roman_numeral_chord_vector_oh[i, j, temp_chord] = 1
+            roman_numeral_chord_vector[i] = temp_chord
+            roman_numeral_chord_vector_oh[i, temp_chord] = 1
+        else:
+            # There is no chord (when # of unique pitch <= 1)
+            if verbose and not (valid_sequences is not None and not valid_sequences[i]) and i < visualizing_length:
+                print("no chord")
+            #roman_numeral_chord_vector[i, j] = 0
+            #roman_numeral_chord_vector_oh[i, j, 0] = 1
+            roman_numeral_chord_vector[i] = 0
+            roman_numeral_chord_vector_oh[i, 0] = 1
                 
         if verbose and not (valid_sequences is not None and not valid_sequences[i]) and i < visualizing_length:
             print()
@@ -1289,7 +1303,8 @@ def extract_roman_numeral_chord(sequences, sequences_length, verbose=False, one_
             frame = plt.gca()
             frame.axes.get_xaxis().set_visible(False)
             frame.axes.get_yaxis().set_visible(False)
-            plt.imshow(roman_numeral_chord_vector_oh[i, :, :].T, origin='lower')
+            #plt.imshow(roman_numeral_chord_vector_oh[i, :, :].T, origin='lower')
+            plt.imshow(roman_numeral_chord_vector_oh[i, :].T, origin='lower')
             
 
     if verbose:
@@ -1406,6 +1421,34 @@ def extract_note_octave(sequences, onset_sequences, sequences_length, verbose=Fa
         return note_octave_vector_oh
     else:
         return note_octave_vector
+
+
+# 0: no_note, 1 ~ 128: mean(pitches + 1)
+# Note that one_hot option is not available!
+def extract_mean_note_pitch(sequences, onset_sequences, sequences_length, verbose=False, valid_sequences=None):
+
+    note_pitch_vector = np.zeros((sequences_length), dtype=np.int64)
+
+    visualizing_length = VERBOSE_MAX_INDEX
+    if visualizing_length == -1:
+        visualizing_length = sequences_length
+        
+    if verbose:
+        plt.figure()
+        
+    for i in range(0, sequences_length):
+        temp_unique_pitch, temp_pitch_count = np.unique(np.nonzero(sequences[i, :, :])[1], return_counts=True)
+
+        if np.sum(temp_pitch_count) > 0:
+            for j, p in enumerate(temp_unique_pitch):
+                note_pitch_vector[i] += p * temp_pitch_count[j] / np.sum(temp_pitch_count)
+
+            note_pitch_vector[i] += 1
+            
+    if valid_sequences is not None:
+        note_pitch_vector = note_pitch_vector[valid_sequences]
+
+    return note_pitch_vector
 
 
 # 이 함수는 one_hot일 때와 아닐 때 출력되는 값이 다름!
