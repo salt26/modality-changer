@@ -64,6 +64,22 @@ def roman_numeral_label(relative_pitch, quality):
     else:  # quality == "min7":
         return switcher.get(p + 12) + str("7")
 
+def valence_category(valence):
+    if valence < 0.0:
+        return "L"
+    elif valence < 0.5290476:
+        return "M"
+    else:
+        return "H"
+
+def arousal_category(arousal):
+    if arousal < -0.1404167:
+        return "L"
+    elif arousal < 0.3381111:
+        return "M"
+    else:
+        return "H"
+
 # midi_extractor.py에서 나온 결과인 *.npy를 읽어서 음악 특징 벡터 테이블(vgmidi_emotion.csv)을 만드는 코드
 if __name__ == '__main__':
 
@@ -108,18 +124,21 @@ if __name__ == '__main__':
     print(arousal.shape)            # (seq_len, )
 
     data = []
-    header = ["ID", "song", "measure", "empty", "key.local.major",
+    header = ["ID", "song", "measure", "ending", "empty", "key.local.major",
         "key.global.major", "tonic.local", "tonic.global",
         "chord.maj", "chord.min", "chord.aug",
-        "chord.dim", "chord.sus4", "chord.dom7", "chord.min7", "roman.numeral", "roman.numeral.label",
+        "chord.dim", "chord.sus4", "chord.dom7", "chord.min7",
+        "roman.numeral", "roman.numeral.label",
+        "prev.roman.numeral", "prev.roman.numeral.label",
         "note.density", "note.pitch.mean", "note.velocity", "rhythm.density",
-        "tempo", "valence", "arousal", "valence.category", "arousal.category"]
+        "tempo", "valence", "arousal", "valence.category", "arousal.category",
+        "prev.valence", "prev.arousal", "prev.valence.category", "prev.arousal.category"]
     #data.append(header)
     
     
     seq_len = key.shape[0]
     for i in range(seq_len):
-        entity = [i, metadata[i][1], int(metadata[i][0])]
+        entity = [i, metadata[i][1], int(metadata[i][0]), 0]
 
         # empty: key가 0 -> 1, 1 이상 -> 0
         if key[i] == 0:
@@ -180,6 +199,28 @@ if __name__ == '__main__':
         else:
             entity.append(roman_numeral_label(roman_numeral[i] - 1, chord_types[(roman_numeral[i] - 1) // 12]))
 
+        # add dummy data with ending=1, roman.numeral=0, prev.roman.numeral=(last roman numeral of this song)
+        if i != 0 and metadata[i][1] != metadata[i - 1][1]:
+            data.append([-i, metadata[i - 1][1], int(metadata[i - 1][0]) + 1, 1, 1,
+                1, 1, 'C', 'C', 0, 0, 0, 0, 0, 0, 0,
+                0, 'no_chord',
+                roman_numeral[i - 1], roman_numeral_label(roman_numeral[i - 1] - 1, chord_types[(roman_numeral[i - 1] - 1) // 12]),
+                0, 0, 0, 0, np.mean(tempo[i - 1]),
+                valence[i - 1], arousal[i - 1], valence_category(valence[i - 1]), arousal_category(arousal[i - 1]),
+                valence[i - 1], arousal[i - 1], valence_category(valence[i - 1]), arousal_category(arousal[i - 1])])
+
+        # prev.roman.numeral
+        if i == 0 or int(metadata[i][0]) == 0:
+            entity.append(0)
+        else:
+            entity.append(roman_numeral[i - 1])
+
+        # prev.roman.numeral.label
+        if i == 0 or int(metadata[i][0]) == 0 or roman_numeral[i - 1] == 0:
+            entity.append("no_chord")
+        else:
+            entity.append(roman_numeral_label(roman_numeral[i - 1] - 1, chord_types[(roman_numeral[i - 1] - 1) // 12]))
+
         # note.density
         entity.append(np.mean(note_density[i]))
 
@@ -200,22 +241,33 @@ if __name__ == '__main__':
         entity.append(arousal[i])
 
         # valence.category
-        if valence[i] < 0.0:
-            entity.append("L")
-        elif valence[i] < 0.5290476:
-            entity.append("M")
-        else:
-            entity.append("H")
+        entity.append(valence_category(valence[i]))
 
         # arousal.category
-        if arousal[i] < -0.1404167:
-            entity.append("L")
-        elif arousal[i] < 0.3381111:
-            entity.append("M")
+        entity.append(arousal_category(arousal[i]))
+        
+        # prev.valence, prev.arousal, prev.valence.category, prev.arousal.category
+        if i == 0 or int(metadata[i][0]) == 0:
+            entity.append(valence[i])
+            entity.append(arousal[i])
+            entity.append(valence_category(valence[i]))
+            entity.append(arousal_category(arousal[i]))
         else:
-            entity.append("H")
+            entity.append(valence[i - 1])
+            entity.append(arousal[i - 1])
+            entity.append(valence_category(valence[i - 1]))
+            entity.append(arousal_category(arousal[i - 1]))
 
         data.append(entity)
+
+    i = seq_len
+    data.append([-i, metadata[i - 1][1], int(metadata[i - 1][0]) + 1, 1, 1,
+        1, 1, 'C', 'C', 0, 0, 0, 0, 0, 0, 0,
+        0, 'no_chord',
+        roman_numeral[i - 1], roman_numeral_label(roman_numeral[i - 1] - 1, chord_types[(roman_numeral[i - 1] - 1) // 12]),
+        0, 0, 0, 0, np.mean(tempo[i - 1]),
+        valence[i - 1], arousal[i - 1], valence_category(valence[i - 1]), arousal_category(arousal[i - 1]),
+        valence[i - 1], arousal[i - 1], valence_category(valence[i - 1]), arousal_category(arousal[i - 1])])
 
     #print(data[0])
     #print(data[1947])

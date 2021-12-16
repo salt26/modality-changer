@@ -83,8 +83,8 @@ def midi_to_midi_feature(midi_file_path, starting_measure=0, ending_measure=-1, 
     f["chord.min7"] = np.sum(chord_oh[:, :, 73:85]) / not_empty_len
 
     f["note.density"] = np.sum(features["Note_density"][starting_measure : ending_measure, :][not_empty, ...]) / not_empty_len / 16
-    temp_octave_vector = features["Note_octave"][starting_measure : ending_measure, :][not_empty, ...]
-    f["note.octave"] = np.mean(temp_octave_vector[np.nonzero(temp_octave_vector)]) - 1
+    temp_pitch_mean_vector = features["Note_pitch_mean"][starting_measure : ending_measure][not_empty]
+    f["note.pitch.mean"] = np.mean(temp_pitch_mean_vector[np.nonzero(temp_pitch_mean_vector)])
     f["note.velocity"] = np.sum(features["Note_velocity"][starting_measure : ending_measure, :][not_empty, ...]) / not_empty_len / 16
     f["rhythm.density"] = 16 - (np.count_nonzero(features["Rhythm_density"][starting_measure : ending_measure, :][not_empty, ...] - 1) / not_empty_len)
     f["tempo"] = np.sum(features["Tempo"][starting_measure : ending_measure, :][not_empty, ...]) / not_empty_len / 16
@@ -113,7 +113,7 @@ def emotion_to_midi_feature(valence, arousal):
     f["chord.min7"] = clamp(2.11296 + 0.48170 * valence - 0.32964 * arousal, 0, 16)
 
     f["note.density"] = clamp(3.34349 - 0.25946 * valence, 0, 15)
-    f["note.octave"] = 5.508  # sd = 0.7763639
+    f["note.pitch.mean"] = clamp(60.57052 - 0.44633 * arousal, 0, 127)
     f["note.velocity"] = clamp(95.4541 - 5.0989 * valence + 6.7917 * arousal, 0, 127)
     f["rhythm.density"] = clamp(7.42540 + 0.25139 * valence + 1.77139 * arousal, 0, 16)
     f["tempo"] = max(0, 567652 - 65097 * valence - 188871 * arousal)
@@ -126,7 +126,7 @@ def emotion_dict_to_midi_feature(emotion_dict):
 
 def midi_feature_to_emotion(key_local_major, key_global_major, chord_maj, chord_min, chord_aug,
                              chord_dim, chord_sus4, chord_dom7, chord_min7, note_density, 
-                             note_octave, note_velocity, rhythm_density, tempo):
+                             note_pitch_mean, note_velocity, rhythm_density, tempo):
     key_local_major = clamp(key_local_major, 0, 1, True)
     key_global_major = clamp(key_global_major, 0, 1, True)
     chord_maj = clamp(chord_maj, 0, 16)
@@ -137,23 +137,24 @@ def midi_feature_to_emotion(key_local_major, key_global_major, chord_maj, chord_
     chord_dom7 = clamp(chord_dom7, 0, 16)
     chord_min7 = clamp(chord_min7, 0, 16)
     note_density = clamp(note_density, 0, 15)
-    note_octave = clamp(note_octave, 0, 10)
+    note_pitch_mean = clamp(note_pitch_mean, 0, 127)
     note_velocity = clamp(note_velocity, 0, 127)
     rhythm_density = clamp(rhythm_density, 0, 16)
     tempo = max(0, tempo)
 
     e = {}
 
-    e["valence"] = clamp(0.2400 + 0.02279 * key_local_major + 0.2481 * key_global_major
-        + 0.02295 * chord_maj + 0.01646 * chord_min + 0.01172 * chord_aug + 0.02009 * chord_sus4
-        + 0.01946 * chord_dom7 + 0.02490 * chord_min7 - 0.01556 * note_density
-        - 0.002267 * note_velocity - 0.0000003606 * tempo, -1, 1)
+    e["valence"] = clamp(0.1653 + key_local_major * 0.02307 + key_global_major * 0.2474
+        + chord_maj * 0.02263 + chord_min * 0.01604 + chord_aug * 0.01141
+        + chord_sus4 * 0.01969 + chord_dom7 * 0.01894 + chord_min7 * 0.02430
+        - note_density * 0.01632 + note_pitch_mean * 0.001199
+        - note_velocity * 0.002259 + rhythm_density * 0.001919 - tempo * 0.0000003687, -1, 1)
 
-    e["arousal"] = clamp(0.2899 - 0.02058 * key_global_major - 0.01803 * chord_maj
-        - 0.01171 * chord_min - 0.01145 * chord_aug - 0.007169 * chord_dim
-        - 0.01942 * chord_sus4 - 0.01507 * chord_dom7 - 0.01826 * chord_min7
-        + 0.02191 * note_octave + 0.001899 * note_velocity + 0.05750 * rhythm_density
-        - 0.001401 * (rhythm_density ** 2) - 0.000001077 * tempo, -1, 1)
+    e["arousal"] = clamp0.3681 + key_local_major * 0.01262 - key_global_major * 0.02040
+        - chord_maj * 0.01758 - chord_min * 0.01048 - chord_aug * 0.01072
+        - chord_dim * 0.006241 - chord_sus4 * 0.01869 - chord_dom7 * 0.01427 - chord_min7 * 0.01732
+        + note_density * 0.005358 + note_velocity * 0.001878 + rhythm_density * 0.05882
+        - (rhythm_density ** 2) * 0.001457 - tempo * 0.000001073, -1, 1)
 
     return e
 
@@ -162,7 +163,7 @@ def midi_feature_dict_to_emotion(midi_feature_dict):
         midi_feature_dict["chord.maj"], midi_feature_dict["chord.min"], midi_feature_dict["chord.aug"],
         midi_feature_dict["chord.dim"], midi_feature_dict["chord.sus4"],
         midi_feature_dict["chord.dom7"], midi_feature_dict["chord.min7"],
-        midi_feature_dict["note.density"], midi_feature_dict["note.octave"], 
+        midi_feature_dict["note.density"], midi_feature_dict["note.pitch.mean"], 
         midi_feature_dict["note.velocity"], midi_feature_dict["rhythm.density"], midi_feature_dict["tempo"])
 
 

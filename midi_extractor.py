@@ -1433,7 +1433,7 @@ def extract_note_octave(sequences, onset_sequences, sequences_length, verbose=Fa
         return note_octave_vector
 
 
-# 0: no_note, 1 ~ 128: mean(pitches + 1)
+# 0: no_note, 0 ~ 127: mean(pitches)
 # Note that one_hot option is not available!
 def extract_mean_note_pitch(sequences, onset_sequences, sequences_length, verbose=False, valid_sequences=None):
 
@@ -1452,8 +1452,6 @@ def extract_mean_note_pitch(sequences, onset_sequences, sequences_length, verbos
         if np.sum(temp_pitch_count) > 0:
             for j, p in enumerate(temp_unique_pitch):
                 note_pitch_vector[i] += p * temp_pitch_count[j] / np.sum(temp_pitch_count)
-
-            note_pitch_vector[i] += 1
             
     if valid_sequences is not None:
         note_pitch_vector = note_pitch_vector[valid_sequences]
