@@ -13,6 +13,7 @@ import matplotlib.pyplot as plt
 import copy
 import argparse
 import torch
+from change_modality_utils import extracted_features_to_midi_feature, midi_feature_dict_to_emotion
 from valence_preprocess import get_preprocessed_valence_arousal_dict
 from IPython import embed
 
@@ -26,7 +27,7 @@ import magenta.music
 """
 
 chord_templates = {}
-OUT_DIR = './output/'
+OUT_DIR = './output_yamaha/'
 VERBOSE_SAVE = False  # True (save figures to .png files) or False (show figures without saving)
 VERBOSE_MAX_INDEX = -1  # -1 (show all sequences to figures) or a positive integer (show # sequences to figures)
 
@@ -140,7 +141,7 @@ def magenta_decode_midi(notes, is_eos=False):
 """
 
 
-def read_dir(in_dir, verbose=False, one_hot=False, valence_label=True, arousal_label=True):
+def read_dir(in_dir, verbose=False, one_hot=False, valence_label=True, arousal_label=True, predict_emotion=False):
     file_list = []
     mid_files = listdir(in_dir)
 
@@ -203,7 +204,7 @@ def read_dir(in_dir, verbose=False, one_hot=False, valence_label=True, arousal_l
                 make_piano_roll_sequences(events, notes, ticks_per_beat, verbose)
 
             sequence_files, valid_sequences = sequences_to_midi_file(events, sequences_length, ticks_per_beat,
-                                                                     in_dir.replace('\\', '/') + in_path)
+                                                                     in_dir.replace('\\', '/') + in_path, False)
 
             v_midi_list.extend(sequence_files)
 
@@ -246,6 +247,14 @@ def read_dir(in_dir, verbose=False, one_hot=False, valence_label=True, arousal_l
             v_note_octave_list.extend(features['Note_octave'])
             v_mean_note_pitch_list.extend(features['Mean_note_pitch'])
             v_tempo_list.extend(features['Tempo'])
+
+            if predict_emotion:
+                temp_emotion = midi_feature_dict_to_emotion(
+                    extracted_features_to_midi_feature(fname, features, sequences_length))
+                if not valence_label:
+                    v_valence_list.extend(temp_emotion["valence"])
+                if not arousal_label:
+                    v_arousal_list.extend(temp_emotion["arousal"])
 
             assert(len(v_rhythm_density_list) == len(v_midi_list))
             assert(len(v_note_density_list) == len(v_midi_list))
@@ -314,7 +323,19 @@ def read_dir(in_dir, verbose=False, one_hot=False, valence_label=True, arousal_l
         #print(v_token_list.shape, v_rhythm_density_list.shape, v_note_density_list.shape, v_melodic_contour_list.shape,
         print(v_rhythm_density_list.shape, v_note_density_list.shape, v_melodic_contour_list.shape,
               v_key_list.shape, v_global_key_list.shape, v_chord_list.shape, v_roman_numeral_chord_list.shape, v_note_velocity_list.shape,
-              v_note_octave_list.shape, v_mean_note_pitch_list, v_tempo_list.shape, v_valence_list.shape, v_arousal_list.shape)
+              v_note_octave_list.shape, v_mean_note_pitch_list.shape, v_tempo_list.shape, v_valence_list.shape, v_arousal_list.shape)
+    elif predict_emotion:
+        v_valence_list = np.array(v_valence_list)
+        v_arousal_list = np.array(v_arousal_list)
+
+        #print("Shapes for: Data, Rhythm Density, Note Density, Melodic_contour, "
+        print("Shapes for: Rhythm Density, Note Density, Melodic_contour, "
+              "Key, Global_key, Chord, Roman_numeral_chord, Note_velocity, "
+              "Note_octave, Mean_note_pitch, Tempo, Valence(predicted), Arousal(predicted)")
+        #print(v_token_list.shape, v_rhythm_density_list.shape, v_note_density_list.shape, v_melodic_contour_list.shape,
+        print(v_rhythm_density_list.shape, v_note_density_list.shape, v_melodic_contour_list.shape,
+              v_key_list.shape, v_global_key_list.shape, v_chord_list.shape, v_roman_numeral_chord_list.shape, v_note_velocity_list.shape,
+              v_note_octave_list.shape, v_mean_note_pitch_list.shape, v_tempo_list.shape, v_valence_list.shape, v_arousal_list.shape)
     else:
         #print("Shapes for: Data, Rhythm Density, Note Density, Melodic_contour, "
         print("Shapes for: Rhythm Density, Note Density, Melodic_contour, "
@@ -323,7 +344,7 @@ def read_dir(in_dir, verbose=False, one_hot=False, valence_label=True, arousal_l
         #print(v_token_list.shape, v_rhythm_density_list.shape, v_note_density_list.shape, v_melodic_contour_list.shape,
         print(v_rhythm_density_list.shape, v_note_density_list.shape, v_melodic_contour_list.shape,
               v_key_list.shape, v_global_key_list.shape, v_chord_list.shape, v_roman_numeral_chord_list.shape, v_note_velocity_list.shape,
-              v_note_octave_list.shape, v_mean_note_pitch_list, v_tempo_list.shape)
+              v_note_octave_list.shape, v_mean_note_pitch_list.shape, v_tempo_list.shape)
 
     #np.save(OUT_DIR+"extracted/data.npy", v_token_list)
     np.save(OUT_DIR+"extracted/rhythm.npy", v_rhythm_density_list)
@@ -338,9 +359,9 @@ def read_dir(in_dir, verbose=False, one_hot=False, valence_label=True, arousal_l
     np.save(OUT_DIR+"extracted/mean_note_pitch.npy", v_mean_note_pitch_list)
     np.save(OUT_DIR+"extracted/tempo.npy", v_tempo_list)
 
-    if valence_label:
+    if valence_label or predict_emotion:
         np.save(OUT_DIR+"extracted/valence.npy", v_valence_list)
-    if arousal_label:
+    if arousal_label or predict_emotion:
         np.save(OUT_DIR+"extracted/arousal.npy", v_arousal_list)
 
     return file_list
@@ -560,7 +581,7 @@ def make_piano_roll_sequences(events, notes, tpb, verbose=False):
     return sequences, onset_sequences, sequences_length
 
 # Make segmented token sequences to reconstruct midi files
-def sequences_to_midi_file(events, sequences_length, tpb, original_filename):
+def sequences_to_midi_file(events, sequences_length, tpb, original_filename, create_files=False):
 
     # 시퀀스에 들어있는 MIDI 이벤트 토큰들을 담는 배열 초기화
     token_sequences = []
@@ -615,10 +636,11 @@ def sequences_to_midi_file(events, sequences_length, tpb, original_filename):
         mkdir(OUT_DIR)
 
     for i in range(sequences_length):
-        new_midi = MidiFile(type=1)
-        track = MidiTrack()
-        new_midi.tracks.append(track)
-        new_midi.ticks_per_beat = tpb
+        if create_files:
+            new_midi = MidiFile(type=1)
+            track = MidiTrack()
+            new_midi.tracks.append(track)
+            new_midi.ticks_per_beat = tpb
 
         single_note_on = []
         last_tick = 0
@@ -629,37 +651,46 @@ def sequences_to_midi_file(events, sequences_length, tpb, original_filename):
             #print(event)
             tp = event['Type']
             if tp == 'note_on' and event['Note_velocity'] > 0:
-                track.append(Message(tp, channel=event['Channel'], note=event['Note_position'],
-                                     velocity=event['Note_velocity'], time=event['Delta_tick']))
+                if create_files:
+                    track.append(Message(tp, channel=event['Channel'], note=event['Note_position'],
+                                        velocity=event['Note_velocity'], time=event['Delta_tick']))
                 single_note_on.append((event['Note_position'], event['Channel']))
                 has_note_on = True
             if tp == 'note_off' or (tp == 'note_on' and event['Note_velocity'] == 0):
-                track.append(Message(tp, channel=event['Channel'], note=event['Note_position'],
-                                     velocity=event['Note_velocity'], time=event['Delta_tick']))
+                if create_files:
+                    track.append(Message(tp, channel=event['Channel'], note=event['Note_position'],
+                                        velocity=event['Note_velocity'], time=event['Delta_tick']))
                 if (event['Note_position'], event['Channel']) in single_note_on:
                     single_note_on.remove((event['Note_position'], event['Channel']))
             elif tp == 'control_change':
-                track.append(Message(tp, channel=event['Channel'], control=event['Control'],
-                                     value=event['Value'], time=event['Delta_tick']))
+                if create_files:
+                    track.append(Message(tp, channel=event['Channel'], control=event['Control'],
+                                        value=event['Value'], time=event['Delta_tick']))
             elif tp == 'set_tempo':
-                track.append(MetaMessage(tp, tempo=event['Tempo'], time=event['Delta_tick']))
+                if create_files:
+                    track.append(MetaMessage(tp, tempo=event['Tempo'], time=event['Delta_tick']))
             elif tp == 'end_of_track':
-                track.append(MetaMessage(tp, time=event['Delta_tick']))
+                if create_files:
+                    track.append(MetaMessage(tp, time=event['Delta_tick']))
             elif event['Is_meta']:
-                track.append(MetaMessage(tp, time=event['Delta_tick']))
+                if create_files:
+                    track.append(MetaMessage(tp, time=event['Delta_tick']))
 
             last_tick = event['Tick']
+        
+        if create_files:
+            for note in single_note_on:
+                track.append(Message('note_off', channel=note[1], note=note[0],
+                                        velocity=0, time=tpb * 4 - last_tick))
+                last_tick = tpb * 4
 
-        for note in single_note_on:
-            track.append(Message('note_off', channel=note[1], note=note[0],
-                                 velocity=0, time=tpb * 4 - last_tick))
-            last_tick = tpb * 4
-
-        track.append(MetaMessage('end_of_track', time=0))
+        if create_files:
+            track.append(MetaMessage('end_of_track', time=0))
 
         if has_note_on:
             filename = original_filename[original_filename.rfind('/') + 1:]
-            new_midi.save(OUT_DIR + str(i) + "_" + filename)
+            if create_files:
+                new_midi.save(OUT_DIR + str(i) + "_" + filename)
             sequence_files.append(str(i) + "_" + filename)
             valid_sequences[i] = True
             #print('\n' + str(i) + "_" + filename)
@@ -1635,19 +1666,19 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('-v', '--verbose', action='store_true', help='verbose')
     parser.add_argument('-o', '--one_hot', action='store_true', help='apply one-hot encoding to feature vectors')
-    parser.add_argument('--no_valence', action='store_true', help='use when valence label is not available')
+    parser.add_argument('--no_emotion', action='store_true', help='use when emotion(valence, arousal) label is not available. Instead, predicted emotion label is used.')
     parser.add_argument('in_dirs', nargs='*', help='input directories that contain MIDI files')
     args = parser.parse_args()
 
     # simple tests
     if len(args.in_dirs) == 1:
         print('Loading folder 1 of 1: {}'.format(sys.argv[1]))
-        read_dir(args.in_dirs[0], args.verbose, args.one_hot, not args.no_valence, not args.no_valence)
+        read_dir(args.in_dirs[0], args.verbose, args.one_hot, not args.no_emotion, not args.no_emotion, args.no_emotion)
     elif len(args.in_dirs) > 1:
         n = len(args.in_dirs)
         for i, d in enumerate(args.in_dirs):
             print('Loading folder {} of {}: {}'.format(i + 1, n, d))
-            read_dir(d, args.verbose, args.one_hot, not args.no_valence, not args.no_valence)
+            read_dir(d, args.verbose, args.one_hot, not args.no_emotion, not args.no_emotion, args.no_emotion)
 
     else:
-        print('Usage:\n\tpython midi_extractor.py [-v] [-o] <in_dir_1> ... <in_dir_n>')
+        print('Usage:\n\tpython midi_extractor.py [-v] [-o] [--no_emotion] <in_dir_1> ... <in_dir_n>')
