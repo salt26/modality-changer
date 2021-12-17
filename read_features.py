@@ -21,9 +21,9 @@ def pitch_class(note_position):
     }
     return switcher.get(p)
 
-def roman_numeral_label(relative_pitch, quality):
+def roman_numeral_label(relative_pitch, quality, key_major):
     p = relative_pitch % 12
-    switcher = {
+    major_switcher = {
         0: 'I',
         1: '#I',
         2: 'II',
@@ -49,6 +49,37 @@ def roman_numeral_label(relative_pitch, quality):
         22: '#vi',
         23: 'vii'
     }
+    minor_switcher = {
+        0: 'I',
+        1: '#I',
+        2: 'II',
+        3: 'III',
+        4: '#III',
+        5: 'IV',
+        6: '#IV',
+        7: 'V',
+        8: 'VI',
+        9: '#VI',
+        10: 'VII',
+        11: '#VII',
+        12: 'i',
+        13: '#i',
+        14: 'ii',
+        15: 'iii',
+        16: '#iii',
+        17: 'iv',
+        18: '#iv',
+        19: 'v',
+        20: 'vi',
+        21: '#vi',
+        22: 'vii',
+        23: '#vii'
+    }
+
+    switcher = minor_switcher
+    if key_major:
+        switcher = major_switcher
+    
     if quality == "maj":
         return switcher.get(p)
     elif quality == "min":
@@ -197,14 +228,14 @@ if __name__ == '__main__':
         if roman_numeral[i] == 0:
             entity.append("no_chord")
         else:
-            entity.append(roman_numeral_label(roman_numeral[i] - 1, chord_types[(roman_numeral[i] - 1) // 12]))
+            entity.append(roman_numeral_label(roman_numeral[i] - 1, chord_types[(roman_numeral[i] - 1) // 12], global_key[i] < 13))
 
         # add dummy data with ending=1, roman.numeral=0, prev.roman.numeral=(last roman numeral of this song)
         if i != 0 and metadata[i][1] != metadata[i - 1][1]:
             data.append([-i, metadata[i - 1][1], int(metadata[i - 1][0]) + 1, 1, 1,
                 1, 1, 'C', 'C', 0, 0, 0, 0, 0, 0, 0,
                 0, 'no_chord',
-                roman_numeral[i - 1], roman_numeral_label(roman_numeral[i - 1] - 1, chord_types[(roman_numeral[i - 1] - 1) // 12]),
+                roman_numeral[i - 1], roman_numeral_label(roman_numeral[i - 1] - 1, chord_types[(roman_numeral[i - 1] - 1) // 12], global_key[i - 1] < 13),
                 0, 0, 0, 0, np.mean(tempo[i - 1]),
                 valence[i - 1], arousal[i - 1], valence_category(valence[i - 1]), arousal_category(arousal[i - 1]),
                 valence[i - 1], arousal[i - 1], valence_category(valence[i - 1]), arousal_category(arousal[i - 1])])
@@ -219,7 +250,7 @@ if __name__ == '__main__':
         if i == 0 or int(metadata[i][0]) == 0 or roman_numeral[i - 1] == 0:
             entity.append("no_chord")
         else:
-            entity.append(roman_numeral_label(roman_numeral[i - 1] - 1, chord_types[(roman_numeral[i - 1] - 1) // 12]))
+            entity.append(roman_numeral_label(roman_numeral[i - 1] - 1, chord_types[(roman_numeral[i - 1] - 1) // 12], global_key[i - 1] < 13))
 
         # note.density
         entity.append(np.mean(note_density[i]))
@@ -264,7 +295,7 @@ if __name__ == '__main__':
     data.append([-i, metadata[i - 1][1], int(metadata[i - 1][0]) + 1, 1, 1,
         1, 1, 'C', 'C', 0, 0, 0, 0, 0, 0, 0,
         0, 'no_chord',
-        roman_numeral[i - 1], roman_numeral_label(roman_numeral[i - 1] - 1, chord_types[(roman_numeral[i - 1] - 1) // 12]),
+        roman_numeral[i - 1], roman_numeral_label(roman_numeral[i - 1] - 1, chord_types[(roman_numeral[i - 1] - 1) // 12], global_key[i - 1] < 13),
         0, 0, 0, 0, np.mean(tempo[i - 1]),
         valence[i - 1], arousal[i - 1], valence_category(valence[i - 1]), arousal_category(arousal[i - 1]),
         valence[i - 1], arousal[i - 1], valence_category(valence[i - 1]), arousal_category(arousal[i - 1])])
