@@ -1,6 +1,12 @@
 import numpy as np
 import pandas as pd
 
+VGMIDI = False
+
+IN_DIR = "output/extracted/"
+if not VGMIDI:
+    IN_DIR = "output_yamaha/1/extracted/"
+
 chord_types = ["maj", "min", "aug", "dim", "sus4", "dom7", "min7"]
 
 def pitch_class(note_position):
@@ -96,39 +102,55 @@ def roman_numeral_label(relative_pitch, quality, key_major):
         return switcher.get(p + 12) + str("7")
 
 def valence_category(valence):
-    if valence < 0.0:
-        return "L"
-    elif valence < 0.5290476:
-        return "M"
-    else:
-        return "H"
+    if VGMIDI:
+        if valence < 0.0:
+            return "L"
+        elif valence < 0.5290476:
+            return "M"
+        else:
+            return "H"
+    else: # TODO
+        if valence < 0.0:
+            return "L"
+        elif valence < 0.5290476:
+            return "M"
+        else:
+            return "H"
 
 def arousal_category(arousal):
-    if arousal < -0.1404167:
-        return "L"
-    elif arousal < 0.3381111:
-        return "M"
-    else:
-        return "H"
+    if VGMIDI:
+        if arousal < -0.1404167:
+            return "L"
+        elif arousal < 0.3381111:
+            return "M"
+        else:
+            return "H"
+    else: # TODO
+        if arousal < -0.1404167:
+            return "L"
+        elif arousal < 0.3381111:
+            return "M"
+        else:
+            return "H"
 
-# midi_extractor.py에서 나온 결과인 *.npy를 읽어서 음악 특징 벡터 테이블(vgmidi_emotion.csv)을 만드는 코드
+# midi_extractor.py에서 나온 결과인 *.npy를 읽어서 음악 특징 벡터 테이블(vgmidi_emotion.csv 또는 yamaha_emotion.csv)을 만드는 코드
 if __name__ == '__main__':
 
-    key = np.load("output/extracted/key.npy")
-    global_key = np.load("output/extracted/global_key.npy")
-    chord = np.load("output/extracted/chord.npy")
-    melodic_contour = np.load("output/extracted/melodic_contour.npy")
-    note_density = np.load("output/extracted/note_density.npy")
-    note_octave = np.load("output/extracted/note_octave.npy")
-    note_velocity = np.load("output/extracted/note_velocity.npy")
-    rhythm_density = np.load("output/extracted/rhythm.npy")
-    roman_numeral = np.load("output/extracted/roman_numeral_chord.npy")
-    tempo = np.load("output/extracted/tempo.npy")
-    mean_note_pitch = np.load("output/extracted/mean_note_pitch.npy")
-    valence = np.load("output/extracted/valence.npy")
-    arousal = np.load("output/extracted/arousal.npy")
+    key = np.load(IN_DIR + "key.npy")
+    global_key = np.load(IN_DIR + "global_key.npy")
+    chord = np.load(IN_DIR + "chord.npy")
+    melodic_contour = np.load(IN_DIR + "melodic_contour.npy")
+    note_density = np.load(IN_DIR + "note_density.npy")
+    note_octave = np.load(IN_DIR + "note_octave.npy")
+    note_velocity = np.load(IN_DIR + "note_velocity.npy")
+    rhythm_density = np.load(IN_DIR + "rhythm.npy")
+    roman_numeral = np.load(IN_DIR + "roman_numeral_chord.npy")
+    tempo = np.load(IN_DIR + "tempo.npy")
+    mean_note_pitch = np.load(IN_DIR + "mean_note_pitch.npy")
+    valence = np.load(IN_DIR + "valence.npy")
+    arousal = np.load(IN_DIR + "arousal.npy")
 
-    f = open("output/extracted/metadata", "r")
+    f = open(IN_DIR + "metadata", "r")
     metadata = []
     while True:
         line = f.readline()
@@ -304,6 +326,9 @@ if __name__ == '__main__':
     #print(data[1947])
 
     df = pd.DataFrame(data)
-    df.to_csv("./output/extracted/vgmidi_emotion.csv", index=False, header=header)
+    if VGMIDI:
+        df.to_csv("./" + IN_DIR + "vgmidi_emotion.csv", index=False, header=header)
+    else:
+        df.to_csv("./" + IN_DIR + "yamaha_emotion.csv", index=False, header=header)
         
 
