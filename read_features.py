@@ -1,7 +1,8 @@
 import numpy as np
 import pandas as pd
+from change_modality_utils import midi_feature_to_emotion
 
-VGMIDI = False
+VGMIDI = True
 
 IN_DIR = "output/extracted/"
 if not VGMIDI:
@@ -133,6 +134,22 @@ def arousal_category(arousal):
         else:
             return "H"
 
+def predicted_valence_category(valence):
+    if valence < 0.1229805:
+        return "L"
+    elif valence < 0.3204725:
+        return "M"
+    else:
+        return "H"
+
+def predicted_arousal_category(arousal):
+    if arousal < 0.04047026:
+        return "L"
+    elif arousal < 0.20592906:
+        return "M"
+    else:
+        return "H"
+
 # midi_extractor.py에서 나온 결과인 *.npy를 읽어서 음악 특징 벡터 테이블(vgmidi_emotion.csv 또는 yamaha_emotion.csv)을 만드는 코드
 if __name__ == '__main__':
 
@@ -185,7 +202,9 @@ if __name__ == '__main__':
         "prev.roman.numeral", "prev.roman.numeral.label",
         "note.density", "note.pitch.mean", "note.velocity", "rhythm.density",
         "tempo", "valence", "arousal", "valence.category", "arousal.category",
-        "prev.valence", "prev.arousal", "prev.valence.category", "prev.arousal.category"]
+        "prev.valence", "prev.arousal", "prev.valence.category", "prev.arousal.category",
+        "predicted.valence", "predicted.arousal",
+        "predicted.valence.category", "predicted.arousal.category"]
     #data.append(header)
     
     
@@ -310,6 +329,18 @@ if __name__ == '__main__':
             entity.append(arousal[i - 1])
             entity.append(valence_category(valence[i - 1]))
             entity.append(arousal_category(arousal[i - 1]))
+
+        # predicted.valence, predicted.arousal, predicted.valence.category, predicted.arousal.category
+        predicted = midi_feature_to_emotion(key_local_major, key_global_major,
+            chord_maj, chord_min, chord_aug, chord_dim, chord_sus4, chord_dom7,
+            chord_min7, np.mean(note_density[i]), mean_note_pitch[i] - 1,
+            np.mean(note_velocity[i]), 16 - np.count_nonzero(rhythm_density[i] - 1),
+            np.mean(tempo[i]))
+
+        entity.append(predicted["valence"])
+        entity.append(predicted["arousal"])
+        entity.append(predicted_valence_category(predicted["valence"]))
+        entity.append(predicted_arousal_category(predicted["arousal"]))
 
         data.append(entity)
 
