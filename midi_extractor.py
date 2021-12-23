@@ -1244,9 +1244,9 @@ def extract_roman_numeral_chord(sequences, sequences_length, verbose=False, one_
                 temp_chord_template = chord_templates[t][0][12 - r: 12] + chord_templates[t][0][0: 12 - r]
                 chord_templates[t].append(temp_chord_template)
 
-    def roman_numeral(relative_pitch, quality):
+    def roman_numeral(relative_pitch, quality, key_major):
         p = relative_pitch % 12
-        switcher = {
+        major_switcher = {
             0: 'I',
             1: '#I',
             2: 'II',
@@ -1272,6 +1272,37 @@ def extract_roman_numeral_chord(sequences, sequences_length, verbose=False, one_
             22: '#vi',
             23: 'vii'
         }
+        minor_switcher = {
+            0: 'I',
+            1: '#I',
+            2: 'II',
+            3: 'III',
+            4: '#III',
+            5: 'IV',
+            6: '#IV',
+            7: 'V',
+            8: 'VI',
+            9: '#VI',
+            10: 'VII',
+            11: '#VII',
+            12: 'i',
+            13: '#i',
+            14: 'ii',
+            15: 'iii',
+            16: '#iii',
+            17: 'iv',
+            18: '#iv',
+            19: 'v',
+            20: 'vi',
+            21: '#vi',
+            22: 'vii',
+            23: '#vii'
+        }
+
+        switcher = minor_switcher
+        if key_major:
+            switcher = major_switcher
+        
         if quality == "maj":
             return switcher.get(p)
         elif quality == "min":
@@ -1323,7 +1354,7 @@ def extract_roman_numeral_chord(sequences, sequences_length, verbose=False, one_
             temp_chord = np.argmin(temp_distance) + 1
             if verbose and not (valid_sequences is not None and not valid_sequences[i]) and i < visualizing_length:
                 # Print chord label
-                print(roman_numeral(temp_chord - 1, chord_types[(temp_chord - 1) // 12]))
+                print(roman_numeral(temp_chord - 1, chord_types[(temp_chord - 1) // 12], temp_key_vector[i] < 13))
             #roman_numeral_chord_vector[i, j] = temp_chord
             #roman_numeral_chord_vector_oh[i, j, temp_chord] = 1
             roman_numeral_chord_vector[i] = temp_chord

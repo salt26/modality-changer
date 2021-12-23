@@ -2,6 +2,12 @@ import numpy as np
 import pandas as pd
 from change_modality_utils import midi_feature_to_emotion
 
+VGMIDI = True
+
+IN_DIR = "output/extracted/"
+if not VGMIDI:
+    IN_DIR = "output_yamaha/1/extracted/"
+
 chord_types = ["maj", "min", "aug", "dim", "sus4", "dom7", "min7"]
 
 def pitch_class(note_position):
@@ -22,9 +28,9 @@ def pitch_class(note_position):
     }
     return switcher.get(p)
 
-def roman_numeral_label(relative_pitch, quality):
+def roman_numeral_label(relative_pitch, quality, key_major):
     p = relative_pitch % 12
-    switcher = {
+    major_switcher = {
         0: 'I',
         1: '#I',
         2: 'II',
@@ -50,6 +56,37 @@ def roman_numeral_label(relative_pitch, quality):
         22: '#vi',
         23: 'vii'
     }
+    minor_switcher = {
+        0: 'I',
+        1: '#I',
+        2: 'II',
+        3: 'III',
+        4: '#III',
+        5: 'IV',
+        6: '#IV',
+        7: 'V',
+        8: 'VI',
+        9: '#VI',
+        10: 'VII',
+        11: '#VII',
+        12: 'i',
+        13: '#i',
+        14: 'ii',
+        15: 'iii',
+        16: '#iii',
+        17: 'iv',
+        18: '#iv',
+        19: 'v',
+        20: 'vi',
+        21: '#vi',
+        22: 'vii',
+        23: '#vii'
+    }
+
+    switcher = minor_switcher
+    if key_major:
+        switcher = major_switcher
+    
     if quality == "maj":
         return switcher.get(p)
     elif quality == "min":
@@ -66,20 +103,36 @@ def roman_numeral_label(relative_pitch, quality):
         return switcher.get(p + 12) + str("7")
 
 def valence_category(valence):
-    if valence < 0.0:
-        return "L"
-    elif valence < 0.5290476:
-        return "M"
-    else:
-        return "H"
+    if VGMIDI:
+        if valence < 0.0:
+            return "L"
+        elif valence < 0.5290476:
+            return "M"
+        else:
+            return "H"
+    else: # TODO
+        if valence < 0.0:
+            return "L"
+        elif valence < 0.5290476:
+            return "M"
+        else:
+            return "H"
 
 def arousal_category(arousal):
-    if arousal < -0.1404167:
-        return "L"
-    elif arousal < 0.3381111:
-        return "M"
-    else:
-        return "H"
+    if VGMIDI:
+        if arousal < -0.1404167:
+            return "L"
+        elif arousal < 0.3381111:
+            return "M"
+        else:
+            return "H"
+    else: # TODO
+        if arousal < -0.1404167:
+            return "L"
+        elif arousal < 0.3381111:
+            return "M"
+        else:
+            return "H"
 
 def predicted_valence_category(valence):
     if valence < 0.1229805:
@@ -97,24 +150,24 @@ def predicted_arousal_category(arousal):
     else:
         return "H"
 
-# midi_extractor.py에서 나온 결과인 *.npy를 읽어서 음악 특징 벡터 테이블(vgmidi_emotion.csv)을 만드는 코드
+# midi_extractor.py에서 나온 결과인 *.npy를 읽어서 음악 특징 벡터 테이블(vgmidi_emotion.csv 또는 yamaha_emotion.csv)을 만드는 코드
 if __name__ == '__main__':
 
-    key = np.load("output/extracted/key.npy")
-    global_key = np.load("output/extracted/global_key.npy")
-    chord = np.load("output/extracted/chord.npy")
-    melodic_contour = np.load("output/extracted/melodic_contour.npy")
-    note_density = np.load("output/extracted/note_density.npy")
-    note_octave = np.load("output/extracted/note_octave.npy")
-    note_velocity = np.load("output/extracted/note_velocity.npy")
-    rhythm_density = np.load("output/extracted/rhythm.npy")
-    roman_numeral = np.load("output/extracted/roman_numeral_chord.npy")
-    tempo = np.load("output/extracted/tempo.npy")
-    mean_note_pitch = np.load("output/extracted/mean_note_pitch.npy")
-    valence = np.load("output/extracted/valence.npy")
-    arousal = np.load("output/extracted/arousal.npy")
+    key = np.load(IN_DIR + "key.npy")
+    global_key = np.load(IN_DIR + "global_key.npy")
+    chord = np.load(IN_DIR + "chord.npy")
+    melodic_contour = np.load(IN_DIR + "melodic_contour.npy")
+    note_density = np.load(IN_DIR + "note_density.npy")
+    note_octave = np.load(IN_DIR + "note_octave.npy")
+    note_velocity = np.load(IN_DIR + "note_velocity.npy")
+    rhythm_density = np.load(IN_DIR + "rhythm.npy")
+    roman_numeral = np.load(IN_DIR + "roman_numeral_chord.npy")
+    tempo = np.load(IN_DIR + "tempo.npy")
+    mean_note_pitch = np.load(IN_DIR + "mean_note_pitch.npy")
+    valence = np.load(IN_DIR + "valence.npy")
+    arousal = np.load(IN_DIR + "arousal.npy")
 
-    f = open("output/extracted/metadata", "r")
+    f = open(IN_DIR + "metadata", "r")
     metadata = []
     while True:
         line = f.readline()
@@ -216,14 +269,14 @@ if __name__ == '__main__':
         if roman_numeral[i] == 0:
             entity.append("no_chord")
         else:
-            entity.append(roman_numeral_label(roman_numeral[i] - 1, chord_types[(roman_numeral[i] - 1) // 12]))
+            entity.append(roman_numeral_label(roman_numeral[i] - 1, chord_types[(roman_numeral[i] - 1) // 12], global_key[i] < 13))
 
         # add dummy data with ending=1, roman.numeral=0, prev.roman.numeral=(last roman numeral of this song)
         if i != 0 and metadata[i][1] != metadata[i - 1][1]:
             data.append([-i, metadata[i - 1][1], int(metadata[i - 1][0]) + 1, 1, 1,
                 1, 1, 'C', 'C', 0, 0, 0, 0, 0, 0, 0,
                 0, 'no_chord',
-                roman_numeral[i - 1], roman_numeral_label(roman_numeral[i - 1] - 1, chord_types[(roman_numeral[i - 1] - 1) // 12]),
+                roman_numeral[i - 1], roman_numeral_label(roman_numeral[i - 1] - 1, chord_types[(roman_numeral[i - 1] - 1) // 12], global_key[i - 1] < 13),
                 0, 0, 0, 0, np.mean(tempo[i - 1]),
                 valence[i - 1], arousal[i - 1], valence_category(valence[i - 1]), arousal_category(arousal[i - 1]),
                 valence[i - 1], arousal[i - 1], valence_category(valence[i - 1]), arousal_category(arousal[i - 1])])
@@ -238,7 +291,7 @@ if __name__ == '__main__':
         if i == 0 or int(metadata[i][0]) == 0 or roman_numeral[i - 1] == 0:
             entity.append("no_chord")
         else:
-            entity.append(roman_numeral_label(roman_numeral[i - 1] - 1, chord_types[(roman_numeral[i - 1] - 1) // 12]))
+            entity.append(roman_numeral_label(roman_numeral[i - 1] - 1, chord_types[(roman_numeral[i - 1] - 1) // 12], global_key[i - 1] < 13))
 
         # note.density
         entity.append(np.mean(note_density[i]))
@@ -295,7 +348,7 @@ if __name__ == '__main__':
     data.append([-i, metadata[i - 1][1], int(metadata[i - 1][0]) + 1, 1, 1,
         1, 1, 'C', 'C', 0, 0, 0, 0, 0, 0, 0,
         0, 'no_chord',
-        roman_numeral[i - 1], roman_numeral_label(roman_numeral[i - 1] - 1, chord_types[(roman_numeral[i - 1] - 1) // 12]),
+        roman_numeral[i - 1], roman_numeral_label(roman_numeral[i - 1] - 1, chord_types[(roman_numeral[i - 1] - 1) // 12], global_key[i - 1] < 13),
         0, 0, 0, 0, np.mean(tempo[i - 1]),
         valence[i - 1], arousal[i - 1], valence_category(valence[i - 1]), arousal_category(arousal[i - 1]),
         valence[i - 1], arousal[i - 1], valence_category(valence[i - 1]), arousal_category(arousal[i - 1])])
@@ -304,6 +357,9 @@ if __name__ == '__main__':
     #print(data[1947])
 
     df = pd.DataFrame(data)
-    df.to_csv("./output/extracted/vgmidi_emotion.csv", index=False, header=header)
+    if VGMIDI:
+        df.to_csv("./" + IN_DIR + "vgmidi_emotion.csv", index=False, header=header)
+    else:
+        df.to_csv("./" + IN_DIR + "yamaha_emotion.csv", index=False, header=header)
         
 
