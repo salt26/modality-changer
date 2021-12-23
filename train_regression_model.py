@@ -16,7 +16,7 @@ if torch.cuda.is_available():
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
 BATCH_SIZE = 128
-EPOCH = 200
+EPOCH = 400
 
 midi_features = []
 emotions = []
@@ -78,6 +78,7 @@ with open('./output/extracted/vgmidi_emotion.csv', 'r') as raw:
             float(line["rhythm.density"]) / 16]
         entity.extend(np.eye(7)[tempo_bin(float(line["tempo"]))])
         entity.extend(np.eye(85)[int(line["roman.numeral"])])
+        entity.extend(np.eye(85)[int(line["prev.roman.numeral"])])
         midi_features.append(entity)
 
         emotion_entity = [(float(line["valence"]) + 1) / 2, (float(line["arousal"]) + 1) / 2]
@@ -103,21 +104,44 @@ train_loader = Data.DataLoader(
 
 val_loader = Data.DataLoader(dataset=val_set)
 
+linear1 = torch.nn.Linear(190, 4096)
+linear2 = torch.nn.Linear(4096, 1024)
+linear3 = torch.nn.Linear(1024, 1024)
+linear4 = torch.nn.Linear(1024, 1024)
+linear5 = torch.nn.Linear(1024, 256)
+linear6 = torch.nn.Linear(256, 64)
+linear7 = torch.nn.Linear(64, 32)
+linear8 = torch.nn.Linear(32, 2)
 net = torch.nn.Sequential(
-    torch.nn.Linear(105, 256),
+    linear1,
+    torch.nn.BatchNorm1d(4096),
     torch.nn.LeakyReLU(),
-    torch.nn.Linear(256, 128),
+    linear2,
+    torch.nn.BatchNorm1d(1024),
     torch.nn.LeakyReLU(),
-    torch.nn.Linear(128, 64),
+    linear3,
+    torch.nn.BatchNorm1d(1024),
     torch.nn.LeakyReLU(),
-    torch.nn.Linear(64, 2)
+    linear4,
+    torch.nn.BatchNorm1d(1024),
+    torch.nn.LeakyReLU(),
+    linear5,
+    torch.nn.BatchNorm1d(256),
+    torch.nn.LeakyReLU(),
+    linear6,
+    torch.nn.BatchNorm1d(64),
+    torch.nn.LeakyReLU(),
+    linear7,
+    torch.nn.BatchNorm1d(32),
+    torch.nn.LeakyReLU(),
+    linear8,
 ).to(device)
-
 optimizer = torch.optim.AdamW(net.parameters(), lr=0.001)
 loss_func = torch.nn.MSELoss()
 
 for epoch in range(EPOCH):
 
+    net.train()
     running_loss = 0.0
     for step, (batch_x, batch_y) in enumerate(train_loader):
         b_x = Variable(batch_x).to(device)
@@ -148,6 +172,7 @@ with torch.no_grad():
     val_loss = 0.0
     category_accuracy = 0.0
     category_matrix = np.zeros((9, 9), dtype=int)
+    net.eval()
     for data in val_loader:
         val_x, val_y = data[0].to(device), data[1].to(device)
 
@@ -162,9 +187,9 @@ with torch.no_grad():
         if gt_category == pred_category:
             category_accuracy += 1
 
-        print(val_y, gt_category, " | ", prediction, pred_category, gt_category == pred_category)
+        #print(val_y, gt_category, " | ", prediction, pred_category, gt_category == pred_category)
 
     print('training loss: %.6f' % (running_loss / BATCH_SIZE))
     print('validation loss: %.6f' % (val_loss / 1000))
-    print('category_accuracy: %.3f' % (category_accuracy / 1000))
+    print('category accuracy: %.3f' % (category_accuracy / 1000))
     print(category_matrix)
