@@ -1,6 +1,11 @@
+from pickle import NONE
 import numpy as np
+import torch
+from torch._C import device
+from torch.autograd import Variable
+import torch.nn.functional as F
+import torch.utils.data as Data
 from scipy import stats
-
 
 def clamp(value, min_value, max_value, integer=False):
     if isinstance(value, (np.ndarray, np.generic)):
@@ -10,6 +15,33 @@ def clamp(value, min_value, max_value, integer=False):
             return max(min_value, min(max_value, round(value)))
         else:
             return max(min_value, min(max_value, value))
+
+
+def tempo_bin(tempo):
+    if isinstance(tempo, (np.ndarray, np.generic)):
+        t = np.zeros_like(tempo, dtype=np.int32)
+        t[tempo <= 1200000] = 1
+        t[tempo <= 1000000] = 2
+        t[tempo <= 800000] = 3
+        t[tempo <= 600000] = 4
+        t[tempo < 444445] = 5
+        t[tempo < 333334] = 6
+        return t
+    else:
+        if tempo > 1200000:    # bpm < 50
+            return 0
+        elif tempo > 1000000:  # bpm < 60
+            return 1
+        elif tempo > 800000:   # bpm < 75
+            return 2
+        elif tempo > 600000:   # bpm < 100
+            return 3
+        elif tempo >= 444445:  # bpm < 135
+            return 4
+        elif tempo >= 333334:  # bpm < 180
+            return 5
+        else:                  # bpm > 180
+            return 6
 
 
 # non-vectorized, aggregated
@@ -61,6 +93,9 @@ def extracted_features_to_aggregated_midi_feature(fname, features, sequences_len
     f["rhythm.density"] = 16 - (np.count_nonzero(features["Rhythm_density"][starting_measure : ending_measure, :][not_empty, ...] - 1) / not_empty_len)
     f["tempo"] = np.sum(features["Tempo"][starting_measure : ending_measure, :][not_empty, ...]) / not_empty_len / 16
 
+    # There are no `f["roman.numeral"]` and `f["prev.roman.numeral"]`.
+    # If you want these features, use `extracted_features_to_midi_feature()`.
+
     return f
 
 
@@ -93,6 +128,9 @@ def extracted_features_to_midi_feature(fname, features, sequences_length):
     f["note.velocity"] = np.sum(features["Note_velocity"], axis=1) / 16
     f["rhythm.density"] = 16 - np.count_nonzero(features["Rhythm_density"] - 1, axis=1)
     f["tempo"] = np.sum(features["Tempo"], axis=1) / 16
+
+    f["roman.numeral"] = features["Roman_numeral_chord"]
+    f["prev.roman.numeral"] = np.concatenate(([0], features["Roman_numeral_chord"][:-1]))
 
     return f
 
@@ -130,7 +168,9 @@ def emotion_dict_to_midi_feature(emotion_dict):
 
 def midi_feature_to_emotion(key_local_major, key_global_major, chord_maj, chord_min, chord_aug,
                              chord_dim, chord_sus4, chord_dom7, chord_min7, note_density, 
-                             note_pitch_mean, note_velocity, rhythm_density, tempo):
+                             note_pitch_mean, note_velocity, rhythm_density, tempo,
+                             roman_numeral=0, prev_roman_numeral=0, use_nn_model=False, verbose=False):
+    
     key_local_major = clamp(key_local_major, 0, 1, True)
     key_global_major = clamp(key_global_major, 0, 1, True)
     chord_maj = clamp(chord_maj, 0, 16)
@@ -145,27 +185,98 @@ def midi_feature_to_emotion(key_local_major, key_global_major, chord_maj, chord_
     note_velocity = clamp(note_velocity, 0, 127)
     rhythm_density = clamp(rhythm_density, 0, 16)
     tempo = clamp(tempo, 0, float("inf"))
+    roman_numeral = clamp(roman_numeral, 0, 84, True)
+    prev_roman_numeral = clamp(prev_roman_numeral, 0, 84, True)
 
     e = {}
 
-    e["valence"] = clamp(0.1653 + key_local_major * 0.02307 + key_global_major * 0.2474
-        + chord_maj * 0.02263 + chord_min * 0.01604 + chord_aug * 0.01141
-        + chord_sus4 * 0.01969 + chord_dom7 * 0.01894 + chord_min7 * 0.02430
-        - note_density * 0.01632 + note_pitch_mean * 0.001199
-        - note_velocity * 0.002259 + rhythm_density * 0.001919 - tempo * 0.0000003687, -1, 1)
+    if use_nn_model:
+        if verbose:
+            print("Use neural regression model")
 
-    e["arousal"] = clamp(0.3681 + key_local_major * 0.01262 - key_global_major * 0.02040
-        - chord_maj * 0.01758 - chord_min * 0.01048 - chord_aug * 0.01072
-        - chord_dim * 0.006241 - chord_sus4 * 0.01869 - chord_dom7 * 0.01427 - chord_min7 * 0.01732
-        + note_density * 0.005358 + note_velocity * 0.001878 + rhythm_density * 0.05882
-        - (rhythm_density ** 2) * 0.001457 - tempo * 0.000001073, -1, 1)
+        torch.manual_seed(100)
+
+        if torch.cuda.is_available() and verbose:
+            print("Use GPU")
+
+        device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+
+        net = torch.nn.Sequential(
+            torch.nn.Linear(190, 4096),
+            torch.nn.BatchNorm1d(4096),
+            torch.nn.LeakyReLU(),
+            torch.nn.Linear(4096, 1024),
+            torch.nn.BatchNorm1d(1024),
+            torch.nn.LeakyReLU(),
+            torch.nn.Linear(1024, 1024),
+            torch.nn.BatchNorm1d(1024),
+            torch.nn.LeakyReLU(),
+            torch.nn.Linear(1024, 1024),
+            torch.nn.BatchNorm1d(1024),
+            torch.nn.LeakyReLU(),
+            torch.nn.Linear(1024, 256),
+            torch.nn.BatchNorm1d(256),
+            torch.nn.LeakyReLU(),
+            torch.nn.Linear(256, 64),
+            torch.nn.BatchNorm1d(64),
+            torch.nn.LeakyReLU(),
+            torch.nn.Linear(64, 32),
+            torch.nn.BatchNorm1d(32),
+            torch.nn.LeakyReLU(),
+            torch.nn.Linear(32, 2),
+        ).to(device)
+        net.load_state_dict(torch.load('./regression_model.pth'))
+
+        entity = np.vstack((key_local_major, key_global_major,
+            chord_maj / 16.0, chord_min / 16.0,
+            chord_aug / 16.0, chord_dim / 16.0,
+            chord_sus4 / 16.0, chord_dom7 / 16.0,
+            chord_min7 / 16.0, note_density / 16.0,
+            note_pitch_mean / 127.0, note_velocity / 127.0,
+            rhythm_density / 16.0))
+        entity = np.vstack((entity, np.transpose(np.eye(7)[tempo_bin(tempo)].reshape((-1, 7)))))
+        entity = np.vstack((entity, np.transpose(np.eye(85)[roman_numeral].reshape((-1, 85)))))
+        entity = np.vstack((entity, np.transpose(np.eye(85)[prev_roman_numeral].reshape((-1, 85)))))
+
+        x = Variable(torch.from_numpy(np.array(np.transpose(entity), dtype=np.float32)))
+        test_loader = Data.DataLoader(dataset=x)
+
+        e["valence"] = []
+        e["arousal"] = []
+
+        with torch.no_grad():
+            net.eval()
+            for data in test_loader:
+                test_x = data.to(device)
+                prediction = net(test_x)
+                e["valence"].append(prediction[0, 0].item() * 2 - 1)
+                e["arousal"].append(prediction[0, 1].item() * 2 - 1)
+        
+        e["valence"] = np.array(e["valence"])
+        e["arousal"] = np.array(e["arousal"])
+
+    else:
+        if verbose:
+            print("Use linear regression model")
+        e["valence"] = clamp(0.1653 + key_local_major * 0.02307 + key_global_major * 0.2474
+            + chord_maj * 0.02263 + chord_min * 0.01604 + chord_aug * 0.01141
+            + chord_sus4 * 0.01969 + chord_dom7 * 0.01894 + chord_min7 * 0.02430
+            - note_density * 0.01632 + note_pitch_mean * 0.001199
+            - note_velocity * 0.002259 + rhythm_density * 0.001919 - tempo * 0.0000003687, -1, 1)
+
+        e["arousal"] = clamp(0.3681 + key_local_major * 0.01262 - key_global_major * 0.02040
+            - chord_maj * 0.01758 - chord_min * 0.01048 - chord_aug * 0.01072
+            - chord_dim * 0.006241 - chord_sus4 * 0.01869 - chord_dom7 * 0.01427 - chord_min7 * 0.01732
+            + note_density * 0.005358 + note_velocity * 0.001878 + rhythm_density * 0.05882
+            - (rhythm_density ** 2) * 0.001457 - tempo * 0.000001073, -1, 1)
 
     return e
 
-def midi_feature_dict_to_emotion(midi_feature_dict):
+def midi_feature_dict_to_emotion(midi_feature_dict, use_nn_model):
     return midi_feature_to_emotion(midi_feature_dict["key.local.major"], midi_feature_dict["key.global.major"],
         midi_feature_dict["chord.maj"], midi_feature_dict["chord.min"], midi_feature_dict["chord.aug"],
         midi_feature_dict["chord.dim"], midi_feature_dict["chord.sus4"],
         midi_feature_dict["chord.dom7"], midi_feature_dict["chord.min7"],
         midi_feature_dict["note.density"], midi_feature_dict["note.pitch.mean"], 
-        midi_feature_dict["note.velocity"], midi_feature_dict["rhythm.density"], midi_feature_dict["tempo"])
+        midi_feature_dict["note.velocity"], midi_feature_dict["rhythm.density"], midi_feature_dict["tempo"],
+        midi_feature_dict["roman.numeral"], midi_feature_dict["prev.roman.numeral"], use_nn_model)

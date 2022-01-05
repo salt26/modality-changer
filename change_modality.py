@@ -46,13 +46,14 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('-s', '--starting_measure', default=0, type=int, help='starting measure number of MIDIs')
     parser.add_argument('-e', '--ending_measure', default=-1, type=int, help='ending measure number of MIDIs')
+    parser.add_argument('--use_nn', action='store_true', help='use neural regression model to predict emotion')
     parser.add_argument('midi_files', nargs='*', help='input MIDI files')
     args = parser.parse_args()
 
     for i, d in enumerate(args.midi_files):
         f = midi_to_midi_feature(args.midi_files[i], int(args.starting_measure), int(args.ending_measure))
         print(f)
-        e = midi_feature_dict_to_emotion(f)
+        e = midi_feature_dict_to_emotion(f, args.use_nn)
         print(e)
         f2 = emotion_dict_to_midi_feature(e)
         print(f2)
@@ -79,9 +80,9 @@ if __name__ == '__main__':
                 a.append(e["arousal"])
         """
         f = midi_to_midi_feature(file_path, False)
-        print(f)
+        #print(f)
         empty = f["empty"]
-        e = midi_feature_dict_to_emotion(f)
+        e = midi_feature_dict_to_emotion(f, args.use_nn)
         print(e)
         v = e["valence"]
         a = e["arousal"]
@@ -91,7 +92,7 @@ if __name__ == '__main__':
         print()
         """
         
-        print(empty)
-        print(v)
-        print(a)
+        #print(empty)
+        #print(v)
+        #print(a)
         print()

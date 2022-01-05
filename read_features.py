@@ -1,12 +1,10 @@
 import numpy as np
 import pandas as pd
+import argparse
 from change_modality_utils import midi_feature_to_emotion
 
 VGMIDI = True
-
 IN_DIR = "output/extracted/"
-if not VGMIDI:
-    IN_DIR = "output_yamaha/1/extracted/"
 
 chord_types = ["maj", "min", "aug", "dim", "sus4", "dom7", "min7"]
 
@@ -135,23 +133,45 @@ def arousal_category(arousal):
             return "H"
 
 def predicted_valence_category(valence):
-    if valence < 0.1229805:
-        return "L"
-    elif valence < 0.3204725:
-        return "M"
+    if isinstance(valence, (np.ndarray, np.generic)):
+        v = np.full_like(valence, "H", dtype=np.str)
+        v[valence < 0.3204725] = "M"
+        v[valence < 0.1229805] = "L"
+        return v
     else:
-        return "H"
+        if valence < 0.1229805:
+            return "L"
+        elif valence < 0.3204725:
+            return "M"
+        else:
+            return "H"
 
 def predicted_arousal_category(arousal):
-    if arousal < 0.04047026:
-        return "L"
-    elif arousal < 0.20592906:
-        return "M"
+    if isinstance(arousal, (np.ndarray, np.generic)):
+        a = np.full_like(arousal, "H", dtype=np.str)
+        a[arousal < 0.20592906] = "M"
+        a[arousal < 0.04047026] = "L"
+        return a
     else:
-        return "H"
+        if arousal < 0.04047026:
+            return "L"
+        elif arousal < 0.20592906:
+            return "M"
+        else:
+            return "H"
 
 # midi_extractor.py에서 나온 결과인 *.npy를 읽어서 음악 특징 벡터 테이블(vgmidi_emotion.csv 또는 yamaha_emotion.csv)을 만드는 코드
 if __name__ == '__main__':
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument('-n', '--number', type=int, default=0, help='yamaha folder number')
+    args = parser.parse_args()
+
+    print(type(np.array(["H", "L"])))
+
+    if args.number > 0:
+        VGMIDI = False
+        IN_DIR = "output_yamaha/" + str(args.number) + "/extracted/"
 
     key = np.load(IN_DIR + "key.npy")
     global_key = np.load(IN_DIR + "global_key.npy")
@@ -282,10 +302,12 @@ if __name__ == '__main__':
                 valence[i - 1], arousal[i - 1], valence_category(valence[i - 1]), arousal_category(arousal[i - 1])])
 
         # prev.roman.numeral
+        prev_roman_numeral = 0
         if i == 0 or int(metadata[i][0]) == 0:
             entity.append(0)
         else:
             entity.append(roman_numeral[i - 1])
+            prev_roman_numeral = roman_numeral[i - 1]
 
         # prev.roman.numeral.label
         if i == 0 or int(metadata[i][0]) == 0 or roman_numeral[i - 1] == 0:
@@ -330,17 +352,19 @@ if __name__ == '__main__':
             entity.append(valence_category(valence[i - 1]))
             entity.append(arousal_category(arousal[i - 1]))
 
+        """
         # predicted.valence, predicted.arousal, predicted.valence.category, predicted.arousal.category
         predicted = midi_feature_to_emotion(key_local_major, key_global_major,
             chord_maj, chord_min, chord_aug, chord_dim, chord_sus4, chord_dom7,
             chord_min7, np.mean(note_density[i]), mean_note_pitch[i] - 1,
             np.mean(note_velocity[i]), 16 - np.count_nonzero(rhythm_density[i] - 1),
-            np.mean(tempo[i]))
+            np.mean(tempo[i]), roman_numeral[i], prev_roman_numeral, True)
 
-        entity.append(predicted["valence"])
-        entity.append(predicted["arousal"])
-        entity.append(predicted_valence_category(predicted["valence"]))
-        entity.append(predicted_arousal_category(predicted["arousal"]))
+        entity.append(predicted["valence"][0])
+        entity.append(predicted["arousal"][0])
+        entity.append(predicted_valence_category(predicted["valence"][0]))
+        entity.append(predicted_arousal_category(predicted["arousal"][0]))
+        """
 
         data.append(entity)
 
@@ -357,6 +381,32 @@ if __name__ == '__main__':
     #print(data[1947])
 
     df = pd.DataFrame(data)
+
+    """
+    [0"ID", 1"song", 2"measure", 3"ending", 4"empty", 5"key.local.major",
+        6"key.global.major", 7"tonic.local", 8"tonic.global",
+        9"chord.maj", 10"chord.min", 11"chord.aug",
+        12"chord.dim", 13"chord.sus4", 14"chord.dom7", 15"chord.min7",
+        16"roman.numeral", 17"roman.numeral.label",
+        18"prev.roman.numeral", 19"prev.roman.numeral.label",
+        20"note.density", 21"note.pitch.mean", 22"note.velocity", 23"rhythm.density",
+        24"tempo", 25"valence", 26"arousal", 27"valence.category", 28"arousal.category",
+        29"prev.valence", 30"prev.arousal", 31"prev.valence.category", 32"prev.arousal.category",
+        33"predicted.valence", 34"predicted.arousal",
+        35"predicted.valence.category", 36"predicted.arousal.category"]
+    """
+
+    predicted = midi_feature_to_emotion(df.iloc[:, 5].values, df.iloc[:, 6].values,
+            df.iloc[:, 9].values, df.iloc[:, 10].values, df.iloc[:, 11].values,
+            df.iloc[:, 12].values, df.iloc[:, 13].values, df.iloc[:, 14].values,
+            df.iloc[:, 15].values, df.iloc[:, 20].values, df.iloc[:, 21].values,
+            df.iloc[:, 22].values, df.iloc[:, 23].values,
+            df.iloc[:, 24].values, df.iloc[:, 16].values, df.iloc[:, 18].values, True)
+    df[33] = predicted["valence"]
+    df[34] = predicted["arousal"]
+    df[35] = predicted_valence_category(predicted["valence"])
+    df[36] = predicted_arousal_category(predicted["arousal"])
+
     if VGMIDI:
         df.to_csv("./" + IN_DIR + "vgmidi_emotion.csv", index=False, header=header)
     else:

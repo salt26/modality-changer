@@ -250,7 +250,7 @@ def read_dir(in_dir, verbose=False, one_hot=False, valence_label=True, arousal_l
 
             if predict_emotion:
                 temp_emotion = midi_feature_dict_to_emotion(
-                    extracted_features_to_midi_feature(fname, features, sequences_length))
+                    extracted_features_to_midi_feature(fname, features, sequences_length), True)
                 if not valence_label:
                     v_valence_list.extend(temp_emotion["valence"])
                 if not arousal_label:
@@ -1698,8 +1698,12 @@ if __name__ == '__main__':
     parser.add_argument('-v', '--verbose', action='store_true', help='verbose')
     parser.add_argument('-o', '--one_hot', action='store_true', help='apply one-hot encoding to feature vectors')
     parser.add_argument('--no_emotion', action='store_true', help='use when emotion(valence, arousal) label is not available. Instead, predicted emotion label is used.')
+    parser.add_argument('-n', '--number', type=int, default=0, help='yamaha folder number')
     parser.add_argument('in_dirs', nargs='*', help='input directories that contain MIDI files')
     args = parser.parse_args()
+
+    if args.number > 0:
+        OUT_DIR = './output_yamaha/' + str(args.number) + '/'
 
     # simple tests
     if len(args.in_dirs) == 1:
@@ -1712,4 +1716,4 @@ if __name__ == '__main__':
             read_dir(d, args.verbose, args.one_hot, not args.no_emotion, not args.no_emotion, args.no_emotion)
 
     else:
-        print('Usage:\n\tpython midi_extractor.py [-v] [-o] [--no_emotion] <in_dir_1> ... <in_dir_n>')
+        print('Usage:\n\tpython midi_extractor.py [-v] [-o] [--no_emotion] [-n N] <in_dir_1> ... <in_dir_n>')
