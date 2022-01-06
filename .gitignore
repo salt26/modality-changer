@@ -21,3 +21,4 @@ Literature/
 plot/
 *.zip
 *.bat
+output/all_emotion.csv

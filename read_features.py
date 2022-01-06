@@ -218,6 +218,7 @@ if __name__ == '__main__':
     f.close()
 
     if VERBOSE:
+        pass
         #print(key.shape)                # (seq_len, )
         #print(global_key.shape)         # (seq_len, )
         #print(chord.shape)              # (seq_len, 16)
