@@ -5,6 +5,7 @@ from change_modality_utils import midi_feature_to_emotion
 
 VGMIDI = True
 IN_DIR = "output/extracted/"
+VERBOSE = True
 
 chord_types = ["maj", "min", "aug", "dim", "sus4", "dom7", "min7"]
 
@@ -100,38 +101,53 @@ def roman_numeral_label(relative_pitch, quality, key_major):
     else:  # quality == "min7":
         return switcher.get(p + 12) + str("7")
 
+# with ground truth or neural regression model
 def valence_category(valence):
-    if VGMIDI:
-        if valence < 0.0:
-            return "L"
-        elif valence < 0.5290476:
-            return "M"
-        else:
-            return "H"
-    else: # TODO
-        if valence < 0.0:
-            return "L"
-        elif valence < 0.5290476:
-            return "M"
-        else:
-            return "H"
+    if isinstance(valence, (np.ndarray, np.generic)):
+        v = np.full_like(valence, "H", dtype=np.str)
+        v[valence < 0.5290476] = "M"
+        v[valence < 0.0] = "L"
+        return v
+    else:
+        if VGMIDI:
+            if valence < 0.0:
+                return "L"
+            elif valence < 0.5290476:
+                return "M"
+            else:
+                return "H"
+        else: # TODO
+            if valence < 0.0:
+                return "L"
+            elif valence < 0.5290476:
+                return "M"
+            else:
+                return "H"
 
+# with ground truth or neural regression model
 def arousal_category(arousal):
-    if VGMIDI:
-        if arousal < -0.1404167:
-            return "L"
-        elif arousal < 0.3381111:
-            return "M"
-        else:
-            return "H"
-    else: # TODO
-        if arousal < -0.1404167:
-            return "L"
-        elif arousal < 0.3381111:
-            return "M"
-        else:
-            return "H"
+    if isinstance(arousal, (np.ndarray, np.generic)):
+        a = np.full_like(arousal, "H", dtype=np.str)
+        a[arousal < 0.3381111] = "M"
+        a[arousal < -0.1404167] = "L"
+        return a
+    else:
+        if VGMIDI:
+            if arousal < -0.1404167:
+                return "L"
+            elif arousal < 0.3381111:
+                return "M"
+            else:
+                return "H"
+        else: # TODO
+            if arousal < -0.1404167:
+                return "L"
+            elif arousal < 0.3381111:
+                return "M"
+            else:
+                return "H"
 
+# with linear regression model
 def predicted_valence_category(valence):
     if isinstance(valence, (np.ndarray, np.generic)):
         v = np.full_like(valence, "H", dtype=np.str)
@@ -146,6 +162,7 @@ def predicted_valence_category(valence):
         else:
             return "H"
 
+# with linear regression model
 def predicted_arousal_category(arousal):
     if isinstance(arousal, (np.ndarray, np.generic)):
         a = np.full_like(arousal, "H", dtype=np.str)
@@ -167,11 +184,12 @@ if __name__ == '__main__':
     parser.add_argument('-n', '--number', type=int, default=0, help='yamaha folder number')
     args = parser.parse_args()
 
-    print(type(np.array(["H", "L"])))
-
     if args.number > 0:
         VGMIDI = False
         IN_DIR = "output_yamaha/" + str(args.number) + "/extracted/"
+
+    if VERBOSE:
+        print("(1/2) Loading midi features...")
 
     key = np.load(IN_DIR + "key.npy")
     global_key = np.load(IN_DIR + "global_key.npy")
@@ -199,19 +217,20 @@ if __name__ == '__main__':
         if not line: break
     f.close()
 
-    print(key.shape)                # (seq_len, )
-    print(global_key.shape)         # (seq_len, )
-    print(chord.shape)
-    print(melodic_contour.shape)
-    print(note_density.shape)
-    print(note_octave.shape)
-    print(note_velocity.shape)
-    print(rhythm_density.shape)
-    print(roman_numeral.shape)
-    print(tempo.shape)
-    print(mean_note_pitch.shape)
-    print(valence.shape)            # (seq_len, )
-    print(arousal.shape)            # (seq_len, )
+    if VERBOSE:
+        #print(key.shape)                # (seq_len, )
+        #print(global_key.shape)         # (seq_len, )
+        #print(chord.shape)              # (seq_len, 16)
+        #print(melodic_contour.shape)    # (seq_len, 16)
+        #print(note_density.shape)       # (seq_len, 16)
+        #print(note_octave.shape)        # (seq_len, 16)
+        #print(note_velocity.shape)      # (seq_len, 16)
+        #print(rhythm_density.shape)     # (seq_len, 16)
+        #print(roman_numeral.shape)      # (seq_len, )
+        #print(tempo.shape)              # (seq_len, 16)
+        #print(mean_note_pitch.shape)    # (seq_len, )
+        #print(valence.shape)            # (seq_len, )
+        #print(arousal.shape)            # (seq_len, )
 
     data = []
     header = ["ID", "song", "measure", "ending", "empty", "key.local.major",
@@ -319,7 +338,7 @@ if __name__ == '__main__':
         entity.append(np.mean(note_density[i]))
 
         # note.pitch.mean
-        entity.append(mean_note_pitch[i] - 1)
+        entity.append(mean_note_pitch[i])
 
         # note.velocity
         entity.append(np.mean(note_velocity[i]))
@@ -356,14 +375,14 @@ if __name__ == '__main__':
         # predicted.valence, predicted.arousal, predicted.valence.category, predicted.arousal.category
         predicted = midi_feature_to_emotion(key_local_major, key_global_major,
             chord_maj, chord_min, chord_aug, chord_dim, chord_sus4, chord_dom7,
-            chord_min7, np.mean(note_density[i]), mean_note_pitch[i] - 1,
+            chord_min7, np.mean(note_density[i]), mean_note_pitch[i],
             np.mean(note_velocity[i]), 16 - np.count_nonzero(rhythm_density[i] - 1),
             np.mean(tempo[i]), roman_numeral[i], prev_roman_numeral, True)
 
         entity.append(predicted["valence"][0])
         entity.append(predicted["arousal"][0])
-        entity.append(predicted_valence_category(predicted["valence"][0]))
-        entity.append(predicted_arousal_category(predicted["arousal"][0]))
+        entity.append(valence_category(predicted["valence"][0]))
+        entity.append(arousal_category(predicted["arousal"][0]))
         """
 
         data.append(entity)
@@ -381,6 +400,9 @@ if __name__ == '__main__':
     #print(data[1947])
 
     df = pd.DataFrame(data)
+
+    if VERBOSE:
+        print("(2/2) Predicting emotion using neural regression model...")
 
     """
     [0"ID", 1"song", 2"measure", 3"ending", 4"empty", 5"key.local.major",
@@ -404,8 +426,8 @@ if __name__ == '__main__':
             df.iloc[:, 24].values, df.iloc[:, 16].values, df.iloc[:, 18].values, True)
     df[33] = predicted["valence"]
     df[34] = predicted["arousal"]
-    df[35] = predicted_valence_category(predicted["valence"])
-    df[36] = predicted_arousal_category(predicted["arousal"])
+    df[35] = valence_category(predicted["valence"])
+    df[36] = arousal_category(predicted["arousal"])
 
     if VGMIDI:
         df.to_csv("./" + IN_DIR + "vgmidi_emotion.csv", index=False, header=header)
