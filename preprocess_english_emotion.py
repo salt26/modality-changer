@@ -3,6 +3,7 @@ from read_features import valence_category, arousal_category
 from build_chord_transition_matrix import category_to_index
 
 if __name__ == '__main__':
+    # Amy Beth Warriner, Victor Kuperman, and Marc Brysbaert. Norms of valence, arousal, and dominance for 13,915 English lemmas. Behavior research methods 45(4): 1191–1207, 2013.
     df = pd.read_csv("./data/english_emotion/BRM-emot-submit.csv")
     data = {"Word": df["Word"],
         "Valence": (df["V.Mean.Sum"].to_numpy() - 5) / 4.0,
