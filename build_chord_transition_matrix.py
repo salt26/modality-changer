@@ -83,8 +83,8 @@ if __name__ == '__main__':
                         svct[prev_sentiment, sentiment, mode, i, :] /= np.sum(svct[prev_sentiment, sentiment, mode, i, :])
 
     print("dump json...")
-    matrices = {'basic': bct.tolist(), 'sentimental': sct.tolist(), 'sentiment-variational': svct.tolist()}
-    json.dump(matrices, codecs.open('./output/chord_transition.json', 'w', encoding='utf-8'))
+    matrices = {'basic': bct.tolist(), 'sentimental': sct.tolist(), 'sentimentVariational': svct.tolist()}
+    json.dump(matrices, codecs.open('./output/ChordTransition.json', 'w', encoding='utf-8'))
 
     
 
